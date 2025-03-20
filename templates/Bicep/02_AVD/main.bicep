@@ -158,3 +158,23 @@ resource avdAgentInstall 'Microsoft.Compute/virtualMachines/extensions@2022-08-0
     ]
   }
 ]
+
+// Run Custom Script from GitHub
+resource customScript 'Microsoft.Compute/virtualMachines/extensions@2022-08-01' = [
+  for (name, i) in vmNames: {
+    name: 'CustomScript'
+    parent: vm[i]
+    properties: {
+      publisher: 'Microsoft.Compute'
+      type: 'CustomScriptExtension'
+      typeHandlerVersion: '1.10'
+      autoUpgradeMinorVersion: true
+      settings: {
+        fileUris: [
+          'https://raw.githubusercontent.com/<GitHubRepo>/<branch>/path-to-script/script.ps1'
+        ]
+        commandToExecute: 'powershell -ExecutionPolicy Unrestricted -File script.ps1'
+      }
+    }
+  }
+]

@@ -35,11 +35,11 @@ param sshPublicKey string = ''
 
 // VM Size Options
 @allowed([
-  'Standard_B2s'
   'Standard_D2s_v3'
-  'Standard_DS1_v2'
+  'Standard_D4s_v3'
+  'Standard_D8s_v3'
 ])
-param vmSize string = 'Standard_B2s'
+param vmSize string = 'Standard_D8s_v3'
 
 // Allowed OS Versions (Ubuntu and RHEL)
 @allowed([

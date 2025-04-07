@@ -1,34 +1,53 @@
 param time string = utcNow('yyyyMMdd-HHmmss') // Timestamp for unique resource names
 param vmCount int = 2 // Number of VMs to create
 param vmSize string = 'Standard_D4ds_v5' // VM size
-param osImage string = 'MicrosoftWindowsDesktop:Windows-11:win11-23h2-avd-m365:latest' // Multisession image
+param osImage string = 'microsoftwindowsdesktop:Windows-11:win11-24h2-avd:latest' // Multisession image without Office
 param vmBaseName string = 'avdhost' // Base name for the VMs
 param adminUsername string
 @secure()
 param adminPassword string
-
-// Existing resources
 param subnetId string // Existing subnet ID
 param location string = resourceGroup().location
 param hostPoolResourceId string // Existing host pool resource ID
-
+param AVDartifactsLocation string = 'https://wvdportalstorageblob.blob.core.windows.net/galleryartifacts/Configuration_1.0.02698.323.zip'// URL to the AVD artifacts location
 // VM configuration
 var vmNames = [for i in range(1, vmCount + 1): '${vmBaseName}-${padLeft(i, 2, '0')}']
 var vmComputerNames = [for i in range(1, vmCount + 1): '${vmBaseName}${padLeft(i, 2, '0')}']
+var aadJoin = true
+var aadJoinPreview = false
+var intune = false
 
-// Call on the existing hotspool
+// Call on the existing host pool
 resource hostPoolGet 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' existing = {
   name: last(split(hostPoolResourceId, '/'))
   scope: resourceGroup(split(hostPoolResourceId, '/')[4])
 }
 
-// Hostpool update
+// Provide a default value for agentUpdate if it is not set
+var defaultAgentUpdate = {
+  type: 'Scheduled'
+  useSessionHostLocalTime: true
+  maintenanceWindowTimeZone: 'UTC'
+  maintenanceWindows: [
+    {
+      dayOfWeek: 'Saturday'
+      hour: 2 // Set the hour for the maintenance window
+      duration: '02:00'
+    }
+  ]
+}
+
+var agentUpdateValue = contains(hostPoolGet.properties, 'agentUpdate') && !empty(hostPoolGet.properties.agentUpdate)
+  ? hostPoolGet.properties.agentUpdate
+  : defaultAgentUpdate
+
+// Host pool update
 module hostPool './hostpool.bicep' = {
   scope: resourceGroup(split(hostPoolResourceId, '/')[4])
   name: 'HostPool-${time}'
   params: {
     name: hostPoolGet.name
-    friendlyName: hostPoolGet.properties.friendlyName
+    friendlyName: (empty(hostPoolGet.properties.friendlyName)) ? '' : hostPoolGet.properties.friendlyName
     location: hostPoolGet.location
     hostPoolType: (hostPoolGet.properties.hostPoolType == 'Personal')
       ? 'Personal'
@@ -54,7 +73,7 @@ module hostPool './hostpool.bicep' = {
     validationEnvironment: hostPoolGet.properties.validationEnvironment
     ring: hostPoolGet.properties.ring
     tags: hostPoolGet.tags
-    agentUpdate: hostPoolGet.properties.agentUpdate.type
+    agentUpdate: agentUpdateValue
   }
 }
 
@@ -122,47 +141,74 @@ resource vm 'Microsoft.Compute/virtualMachines@2023-07-01' = [
   }
 ]
 
+// PowerShell DSC Extension to onboard the VM to the host pool
 // Entra ID Join Extension (AAD Join)
-resource aadJoin 'Microsoft.Compute/virtualMachines/extensions@2022-08-01' = [
+// Enrollment for Intune
+resource avdPowerShellDSC 'Microsoft.Compute/virtualMachines/extensions@2021-07-01' = [
   for (name, i) in vmNames: {
-    name: 'AADJoin'
-    parent: vm[i]
+    name: '${name}/Microsoft.PowerShell.DSC'
+    location: resourceGroup().location
     properties: {
-      publisher: 'Microsoft.Azure.ActiveDirectory'
-      type: 'AADLoginForWindows'
-      typeHandlerVersion: '1.0'
-      autoUpgradeMinorVersion: true
-    }
-  }
-]
-
-// AVD Agent Installation - Custom Script Extension
-resource avdAgentInstall 'Microsoft.Compute/virtualMachines/extensions@2022-08-01' = [
-  for (name, i) in vmNames: {
-    name: 'AVDAgentInstall'
-    parent: vm[i]
-    properties: {
-      publisher: 'Microsoft.Compute'
-      type: 'CustomScriptExtension'
-      typeHandlerVersion: '1.10'
+      publisher: 'Microsoft.Powershell'
+      type: 'DSC'
+      typeHandlerVersion: '2.73'
       autoUpgradeMinorVersion: true
       settings: {
-        fileUris: [
-          'https://raw.githubusercontent.com/Azure/RDS-Templates/master/AVD-windows/avdagentinstall.ps1'
-        ]
-        commandToExecute: 'powershell -ExecutionPolicy Unrestricted -File avdagentinstall.ps1 -RegistrationToken "${hostPool.outputs.hostPoolRegistrationToken}"'
+        modulesUrl: AVDartifactsLocation
+        configurationFunction: 'Configuration.ps1\\AddSessionHost'
+        properties: {
+          hostPoolName: last(split(hostPoolResourceId, '/'))
+          registrationInfoTokenCredential: {
+            UserName: 'PLACEHOLDER_DO_NOT_USE'
+            Password: 'PrivateSettingsRef:RegistrationInfoToken'
+          }
+          aadJoin: aadJoin
+          UseAgentDownloadEndpoint: true
+          aadJoinPreview: aadJoinPreview
+          mdmId: (intune ? '0000000a-0000-0000-c000-000000000000' : '')
+          sessionHostConfigurationLastUpdateTime: ''
+        }
+      }
+      protectedSettings: {
+        Items: {
+          RegistrationInfoToken: hostPool.outputs.hostPoolRegistrationToken
+        }
       }
     }
     dependsOn: [
-      hostPool
     ]
   }
 ]
+
+// AADLoginForWindows Extension
+resource entraloginExtension 'Microsoft.Compute/virtualMachines/extensions@2021-07-01' = [
+  for (name, i) in vmNames: {
+    name: '${name}/AADLoginForWindows'
+    location: resourceGroup().location
+    properties: {
+      publisher: 'Microsoft.Azure.ActiveDirectory'
+      type: 'AADLoginForWindows'
+      typeHandlerVersion: '2.0'
+      autoUpgradeMinorVersion: true
+      settings: (intune
+        ? {
+            mdmId: '0000000a-0000-0000-c000-000000000000'
+          }
+        : null)
+    }
+    dependsOn: [
+      avdPowerShellDSC
+    ]
+  }
+]
+
+/*
 
 // Run Custom Script from GitHub
 resource customScript 'Microsoft.Compute/virtualMachines/extensions@2022-08-01' = [
   for (name, i) in vmNames: {
     name: 'CustomScript'
+    location: location
     parent: vm[i]
     properties: {
       publisher: 'Microsoft.Compute'
@@ -178,3 +224,4 @@ resource customScript 'Microsoft.Compute/virtualMachines/extensions@2022-08-01' 
     }
   }
 ]
+*/

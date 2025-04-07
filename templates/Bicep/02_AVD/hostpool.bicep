@@ -1,6 +1,6 @@
 param name string
 param friendlyName string
-param location string = resourceGroup().location
+param location string
 param tags object = {}
 param hostPoolType string = 'Pooled'
 param publicNetworkAccess string = 'Enabled'
@@ -11,16 +11,18 @@ param maxSessionLimit int = 2
 param loadBalancerType string = 'BreadthFirst'
 param startVMOnConnect bool = false
 param validationEnvironment bool = false
-param registrationTokenOperation string = 'Update'
+param registrationTokenOperation string = 'Update' // Ensure token is updated
 param baseTime string = utcNow()
-param tokenValidityLength string = '90'
+param tokenValidityLength string = 'PT3H' // ISO8601 duration for 3 hours
 param vmTemplate string = ''
-param agentUpdate string = 'Auto'
+param agentUpdate object
 param ring int = -1
 param ssoadfsAuthority string = ''
 param ssoClientId string = ''
+@secure()
 param ssoClientSecretKeyVaultPath string = ''
-param ssoSecretType string = 'KeyVaultSecret'
+@secure()
+param ssoSecretType string = '' // Default to an empty string if not required
 param description string = ''
 
 resource hostPool 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' = {
@@ -41,7 +43,7 @@ resource hostPool 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' = {
     validationEnvironment: validationEnvironment
     registrationInfo: {
       expirationTime: dateTimeAdd(baseTime, tokenValidityLength)
-      token: null
+      token: null // Token will be generated during deployment
       registrationTokenOperation: registrationTokenOperation
     }
     vmTemplate: ((!empty(vmTemplate)) ? null : string(vmTemplate))
@@ -50,8 +52,11 @@ resource hostPool 'Microsoft.DesktopVirtualization/hostPools@2023-09-05' = {
     ssoadfsAuthority: ssoadfsAuthority
     ssoClientId: ssoClientId
     ssoClientSecretKeyVaultPath: ssoClientSecretKeyVaultPath
-    ssoSecretType: ssoSecretType
+    ssoSecretType: (empty(ssoSecretType)) ? null : ssoSecretType // Set to null if empty
   }
 }
 
-output hostPoolRegistrationToken string = hostPool.properties.registrationInfo.token
+// Safely output the registration token if it exists
+output hostPoolRegistrationToken string = hostPool.properties.registrationInfo != null && contains(hostPool.properties.registrationInfo, 'token') && !empty(hostPool.properties.registrationInfo.token)
+  ? hostPool.properties.registrationInfo.token
+  : 'No token available'

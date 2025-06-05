@@ -43,10 +43,10 @@ param vmSize string = 'Standard_D8s_v3'
 
 // Allowed OS Versions (Ubuntu and RHEL)
 @allowed([
-  '7-LVM'   // RHEL 7
-  '8-LVM'   // RHEL 8
-  '20_04-lts-gen2'  // Ubuntu 20.04
-  '22_04-lts-gen2'  // Ubuntu 22.04
+  '7-LVM' // RHEL 7
+  '8-LVM' // RHEL 8
+  '20_04-lts-gen2' // Ubuntu 20.04
+  '22_04-lts-gen2' // Ubuntu 22.04
 ])
 param osVersion string = '20_04-lts-gen2'
 
@@ -147,19 +147,21 @@ resource nics 'Microsoft.Network/networkInterfaces@2021-05-01' = [
 ]
 
 // Deploy Custom Script Extension to Each VM
-resource vmExtensions 'Microsoft.Compute/virtualMachines/extensions@2022-03-01' = [for i in range(0, vmCount): {
-  name: '${baseName}-${format('{0:00}', i + 1)}/customScript'
-  location: resourceGroup().location
-  properties: {
-    publisher: 'Microsoft.Azure.Extensions'
-    type: 'CustomScript'
-    typeHandlerVersion: '2.1'
-    autoUpgradeMinorVersion: true
-    settings: {
-      fileUris: [
-        scriptUri
-      ]
-      commandToExecute: commandToExecute
+resource vmExtensions 'Microsoft.Compute/virtualMachines/extensions@2022-03-01' = [
+  for i in range(0, vmCount): {
+    name: '${baseName}-${format('{0:00}', i + 1)}/customScript'
+    location: resourceGroup().location
+    properties: {
+      publisher: 'Microsoft.Azure.Extensions'
+      type: 'CustomScript'
+      typeHandlerVersion: '2.1'
+      autoUpgradeMinorVersion: true
+      settings: {
+        fileUris: [
+          scriptUri
+        ]
+        commandToExecute: commandToExecute
+      }
     }
   }
-}]
+]

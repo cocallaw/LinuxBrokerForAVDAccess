@@ -1,16 +1,16 @@
 using './main.bicep'
 
-param baseName = 'vmname'
-param vmCount = 1
-param osType = 'Ubuntu'
-param authType = 'SSH'
-param subnetId = ''
-param adminUsername = 'azureuser'
-param adminPassword = ''
-param sshPublicKey = ''
-param vmSize = 'Standard_D8s_v3'
-param osVersion = '20_04-lts-gen2'
-param scriptUriRhel7 = 'https://raw.githubusercontent.com/example/repo/main/rhel7-script.sh'
-param scriptUriRhel8 = 'https://raw.githubusercontent.com/example/repo/main/rhel8-script.sh'
-param scriptUriUbuntu = 'https://raw.githubusercontent.com/example/repo/main/ubuntu-script.sh'
+/*Network Config*/
+param subnetName =  'sn00'
+param vnetName =  'vnet-avd-lab-01'
+param vnetResourceGroup =  'rg-avd-linux-01'
 
+/*VM Config - General*/
+param vmNamePrefix = 'linux-vm'
+param numberOfVMs = 2
+param OSVersion = '24_04-lts'
+
+/*VM Config - Auth*/
+param authType = 'Password'
+param adminUsername = 'cocallaw'
+param adminPassword = 'JustASecret!'

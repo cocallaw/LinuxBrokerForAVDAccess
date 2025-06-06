@@ -1,86 +1,138 @@
-// Base VM Name
-param baseName string = 'vmname'
+param location string = resourceGroup().location
+param tags object = {}
 
-// Number of VMs to deploy
+// Network Parameters
+param vnetName string
+param subnetName string
+param vnetResourceGroup string
+
+// VM Parameters - General
+param vmNamePrefix string
+param vmSize string = 'Standard_DS2_v2'
 @minValue(1)
-@maxValue(100)
-param vmCount int = 1
+@maxValue(20)
+param numberOfVMs int
 
-// OS Type (RHEL or Ubuntu)
-@allowed([
-  'RHEL'
-  'Ubuntu'
-])
-param osType string = 'Ubuntu'
-
-// Authentication Type (Password or SSH)
+// VM Parameters - Authentication
 @allowed([
   'Password'
   'SSH'
 ])
-param authType string = 'SSH'
-
-// Existing Subnet ID
-param subnetId string
-
-// Admin username
-param adminUsername string = 'azureuser'
-
-// Admin password (only used if authType == Password)
+param authType string
+param adminUsername string
 @secure()
 param adminPassword string
-
-// SSH public key (only used if authType == SSH)
 param sshPublicKey string = ''
 
-// VM Size Options
-@allowed([
-  'Standard_D2s_v3'
-  'Standard_D4s_v3'
-  'Standard_D8s_v3'
-])
-param vmSize string = 'Standard_D8s_v3'
-
-// Allowed OS Versions (Ubuntu and RHEL)
+// VM Parameters - OS Image
 @allowed([
   '7-LVM' // RHEL 7
   '8-LVM' // RHEL 8
-  '20_04-lts-gen2' // Ubuntu 20.04
-  '22_04-lts-gen2' // Ubuntu 22.04
+  '9-LVM' // RHEL 9
+  '24_04-lts' // Ubuntu 24.04
 ])
-param osVersion string = '20_04-lts-gen2'
+param OSVersion string
 
-// Custom script URLs hosted on GitHub
-param scriptUriRhel7 string = 'https://raw.githubusercontent.com/example/repo/main/rhel7-script.sh'
-param scriptUriRhel8 string = 'https://raw.githubusercontent.com/example/repo/main/rhel8-script.sh'
-param scriptUriUbuntu string = 'https://raw.githubusercontent.com/example/repo/main/ubuntu-script.sh'
+var vmNames = [for i in range(1, numberOfVMs): '${vmNamePrefix}-${padLeft(i, 2, '0')}']
+var adminPass = authType == 'Password' ? adminPassword : sshPublicKey
 
-// Determine OS image based on user selection
-var osImage = osType == 'RHEL'
-  ? {
+var imageConfigs = {
+  '7-LVM': {
+    image: {
       publisher: 'RedHat'
       offer: 'RHEL'
-      sku: osVersion
+      sku: '7-LVM'
       version: 'latest'
     }
-  : {
-      publisher: 'Canonical'
-      offer: 'UbuntuServer'
-      sku: osVersion
+    script: {
+      uri: 'https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDAccess/refs/heads/main/custom_script_extensions/Configure-RHEL7-Host.sh'
+      cmd: 'bash Configure-RHEL7-Host.sh'
+    }
+  }
+  '8-LVM': {
+    image: {
+      publisher: 'RedHat'
+      offer: 'RHEL'
+      sku: '8-LVM'
       version: 'latest'
     }
+    script: {
+      uri: 'https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDAccess/refs/heads/main/custom_script_extensions/Configure-RHEL8-Host.sh'
+      cmd: 'bash Configure-RHEL8-Host.sh'
+    }
+  }
+  '9-LVM': {
+    image: {
+      publisher: 'RedHat'
+      offer: 'RHEL'
+      sku: '9-LVM'
+      version: 'latest'
+    }
+    script: {
+      uri: 'https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDAccess/refs/heads/main/custom_script_extensions/Configure-RHEL9-Host.sh'
+      cmd: 'bash Configure-RHEL9-Host.sh'
+    }
+  }
+  '24_04-lts': {
+    image: {
+      publisher: 'canonical'
+      offer: 'ubuntu-24_04-lts'
+      sku: 'server'
+      version: 'latest'
+    }
+    script: {
+      uri: 'https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDAccess/refs/heads/main/custom_script_extensions/Configure-Ubuntu24_desktop-Host.sh'
+      cmd: 'bash Configure-Ubuntu24_desktop-Host.sh'
+    }
+  }
+}
 
-// Select correct script URL based on OS and version
-var scriptUri = osType == 'RHEL' ? (osVersion == '7-LVM' ? scriptUriRhel7 : scriptUriRhel8) : scriptUriUbuntu
+// Selected configuration based on OSVersion parameter
+var selectedConfig = imageConfigs[OSVersion]
 
-// Determine the correct command to execute based on OS type
-var commandToExecute = osType == 'RHEL' ? 'bash rhel-script.sh' : 'bash ubuntu-script.sh'
+// Retrieve existing VNet and Subnet
+resource existingVNet 'Microsoft.Network/virtualNetworks@2021-05-01' existing = {
+  name: vnetName
+  scope: resourceGroup(vnetResourceGroup)
+}
 
-// Create VMs with managed identities
-resource vms 'Microsoft.Compute/virtualMachines@2022-03-01' = [
-  for i in range(0, vmCount): {
-    name: '${baseName}-${format('{0:00}', i + 1)}'
-    location: resourceGroup().location
+resource existingSubnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' existing = {
+  parent: existingVNet
+  name: subnetName
+}
+
+// Create Network Interfaces
+resource nic 'Microsoft.Network/networkInterfaces@2024-05-01' = [
+  for (name, i) in vmNames: {
+    name: '${name}-nic'
+    location: location
+    tags: tags
+    properties: {
+      ipConfigurations: [
+        {
+          name: 'ipconfig1'
+          properties: {
+            subnet: {
+              id: existingSubnet.id
+            }
+            privateIPAllocationMethod: 'Dynamic'
+          }
+        }
+      ]
+    }
+    dependsOn: [
+      existingVNet
+      existingSubnet
+    ]
+  }
+]
+
+// Create Linux VMs 
+resource vmLinuxHost 'Microsoft.Compute/virtualMachines@2022-03-01' = [
+  for (name, i) in vmNames: {
+    name: name
+    location: location
+    tags: tags
     identity: {
       type: 'SystemAssigned'
     }
@@ -89,9 +141,9 @@ resource vms 'Microsoft.Compute/virtualMachines@2022-03-01' = [
         vmSize: vmSize
       }
       osProfile: {
-        computerName: '${baseName}-${format('{0:00}', i + 1)}'
+        computerName: vmNames[i]
         adminUsername: adminUsername
-        adminPassword: authType == 'Password' ? adminPassword : null
+        adminPassword: adminPass
         linuxConfiguration: authType == 'SSH'
           ? {
               disablePasswordAuthentication: true
@@ -111,46 +163,37 @@ resource vms 'Microsoft.Compute/virtualMachines@2022-03-01' = [
       networkProfile: {
         networkInterfaces: [
           {
-            id: resourceId('Microsoft.Network/networkInterfaces', '${baseName}-nic-${format('{0:00}', i + 1)}')
+            id: nic[i].id
           }
         ]
       }
       storageProfile: {
-        imageReference: osImage
+        imageReference: selectedConfig.image
         osDisk: {
           createOption: 'FromImage'
         }
       }
-    }
-  }
-]
-
-// Create NICs for each VM
-resource nics 'Microsoft.Network/networkInterfaces@2021-05-01' = [
-  for i in range(0, vmCount): {
-    name: '${baseName}-nic-${format('{0:00}', i + 1)}'
-    location: resourceGroup().location
-    properties: {
-      ipConfigurations: [
-        {
-          name: 'ipconfig1'
-          properties: {
-            subnet: {
-              id: subnetId
-            }
-            privateIPAllocationMethod: 'Dynamic'
-          }
+      securityProfile: {
+        securityType: 'TrustedLaunch'
+        uefiSettings: {
+          secureBootEnabled: true
+          vTpmEnabled: true
         }
-      ]
+      }
     }
+    dependsOn: [
+      existingVNet
+      existingSubnet
+      nic[i]
+    ]
   }
 ]
 
-// Deploy Custom Script Extension to Each VM
-resource vmExtensions 'Microsoft.Compute/virtualMachines/extensions@2022-03-01' = [
-  for i in range(0, vmCount): {
-    name: '${baseName}-${format('{0:00}', i + 1)}/customScript'
-    location: resourceGroup().location
+// Apply Script Based on Image OS
+resource linuxCustomScriptExtension 'Microsoft.Compute/virtualMachines/extensions@2022-03-01' = [
+  for (name, i) in vmNames: {
+    name: '${name}/customScript'
+    location: location
     properties: {
       publisher: 'Microsoft.Azure.Extensions'
       type: 'CustomScript'
@@ -158,10 +201,15 @@ resource vmExtensions 'Microsoft.Compute/virtualMachines/extensions@2022-03-01' 
       autoUpgradeMinorVersion: true
       settings: {
         fileUris: [
-          scriptUri
+          selectedConfig.script.uri
         ]
-        commandToExecute: commandToExecute
+      }
+      protectedSettings: {
+        commandToExecute: selectedConfig.script.cmd
       }
     }
+    dependsOn: [
+      vmLinuxHost[i]
+    ]
   }
 ]

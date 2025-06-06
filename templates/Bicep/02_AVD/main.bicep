@@ -303,6 +303,3 @@ resource linuxBrokerConfig 'Microsoft.Compute/virtualMachines/extensions@2024-11
     ]
   }
 ]
-
-// Optionally, output the registration token for host pool joining
-//output hostPoolRegistrationToken string = hostPoolRegistrationToken.outputs.registrationToken

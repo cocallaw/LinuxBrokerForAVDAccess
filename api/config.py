@@ -18,5 +18,6 @@ DB_SERVER = os.environ.get('DB_SERVER')
 DB_DATABASE = os.environ.get('DB_DATABASE')
 DB_USERNAME = os.environ.get('DB_USERNAME')
 DB_PASSWORD_NAME = os.environ.get('DB_PASSWORD_NAME')
+NFS_SHARE = os.environ.get("NFS_SHARE")
 
 db_password = None

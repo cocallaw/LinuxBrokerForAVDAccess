@@ -29,6 +29,8 @@ release_session_url="https://raw.githubusercontent.com/$GH_OWNER/LinuxBrokerForA
 xrdp_who_xorg_url="https://raw.githubusercontent.com/$GH_OWNER/LinuxBrokerForAVDAccess/refs/heads/$GH_BRANCH/linux_host/session_release_buffer/xrdp-who-xorg.sh"
 screensaver_settings_url="https://raw.githubusercontent.com/$GH_OWNER/LinuxBrokerForAVDAccess/refs/heads/$GH_BRANCH/linux_host/session_release_buffer/RHEL/00-screensaver"
 screensaver_locks_url="https://raw.githubusercontent.com/$GH_OWNER/LinuxBrokerForAVDAccess/refs/heads/$GH_BRANCH/linux_host/session_release_buffer/RHEL/screensaver"
+create_user_script_url="https://raw.githubusercontent.com/$GH_OWNER/LinuxBrokerForAVDAccess/refs/heads/$GH_BRANCH/linux_host/create-user.sh"
+create_user_script="/usr/local/bin/create-user.sh"
 xrdp_ini="/etc/xrdp/xrdp.ini"
 
 arch=$( /bin/arch )
@@ -188,7 +190,7 @@ echo "XRDP is configured with Xorg"
 
 # Creaet AVDUser and give limited sudo rights
 sudo useradd avdadmin
-cmds=(getent useradd userdel groupadd id usermod chpasswd)
+cmds=(getent useradd userdel groupadd id usermod chpasswd chown chmod mount umount mkdir cp /usr/local/bin/create-user.sh)
 full_paths=$(for cmd in "${cmds[@]}"; do command -v "$cmd"; done | paste -sd ',' -)
 echo "avdadmin ALL=(ALL) NOPASSWD: $full_paths" > avdadmin
 sudo cp avdadmin /etc/sudoers.d
@@ -201,6 +203,11 @@ echo "Downloading Gnome Desktop screen lock settings..."
 sudo wget -O "$dconf_local_directory/00-screensaver" "$screensaver_settings_url"
 sudo wget -O "$dconf_local_directory/locks/screensaver" "$screensaver_locks_url"
 sudo dconf update
+
+# Copy Unique User creation script
+echo "Downloading Gnome Desktop screen lock settings..."
+sudo wget -O "$create_user_script" "$create_user_script_url"
+sudo chmod +x $create_user_script
 
 # Complete
 echo "System configuration complete."

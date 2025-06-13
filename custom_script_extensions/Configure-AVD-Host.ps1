@@ -7,6 +7,9 @@ $moduleName = "SqlServer"
 # URL of the script to download
 $url = "https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDAccess/refs/heads/main/avd_host/broker/Connect-LinuxBroker.ps1"
 
+# Define the Linux Broker API Base URL
+$linuxBrokerApiBaseUrl = "https://your_linuxbroker_api_fqdn_here/api"
+
 # Check if the folder exists, if not, create it
 $folderPath = "C:\Temp"
 
@@ -25,6 +28,33 @@ if (-Not (Test-Path -Path $folderPath)) {
     Write-Host "Folder $folderPath already exists."
 }
 
+# Check if the CredentialManager module is installed, if not, install it
+try {
+    if (-not (Get-Module -ListAvailable -Name CredentialManager)) {
+        Write-Host "CredentialManager module is not installed. Attempting to install..."
+        Install-Module -Name CredentialManager -Force
+    } else {
+        Write-Host "CredentialManager module is already installed."
+    }
+
+} catch {
+    Write-Host "Failed to install or import CredentialManager module. Error: $_" -ForegroundColor Red
+    exit 1
+}
+
+# Check if the CredentialManager module is already imported, if not, import it
+try {
+    if (-not (Get-Module -Name CredentialManager)) {
+        Write-Host "Importing CredentialManager module..."
+        Import-Module CredentialManager -Force
+    } else {
+        Write-Host "CredentialManager module is already imported."
+    }
+} catch {
+    Write-Host "Failed to import CredentialManager module. Error: $_" -ForegroundColor Red
+    exit 1
+}
+
 # Download the script using Invoke-WebRequest
 try {
     Invoke-WebRequest -Uri $url -OutFile $outputPath -UseBasicParsing
@@ -36,6 +66,15 @@ try {
 
 } catch {
     Write-Host "Failed to download the script. Error: $_" -ForegroundColor Red
+}
+
+# Modify the API base URL in the script
+try {
+    (Get-Content $outputPath) -replace 'https://your_linuxbroker_api_base_url/api', $linuxBrokerApiBaseUrl | Set-Content $outputPath
+    Write-Host "Updated API Base URL in $outputPath"
+} catch {
+    Write-Host "Failed to update API Base URL. Error: $_" -ForegroundColor Red
+    exit 1
 }
 
 

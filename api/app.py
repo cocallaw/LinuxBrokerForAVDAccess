@@ -151,7 +151,7 @@ def create_or_update_remote_user(hostname: str, username: str, password: str) ->
     try:
         host_fqdn = f"avdadmin@{hostname}.{DOMAIN_NAME}"
         uid = get_or_create_uid(username)
-        check_create_user_command = f"sudo id -u {username} >/dev/null 2>&1 || sudo /usr/local/bin/create-user.sh {NFS_SHARE} {uid} {username}"
+        check_create_user_command = f"sudo /usr/local/bin/create-user.sh {NFS_SHARE} {uid} {username}"
         set_password_command = f"echo '{username}:{password}' | sudo chpasswd"
         command = f"{check_create_user_command} && {set_password_command}"
 

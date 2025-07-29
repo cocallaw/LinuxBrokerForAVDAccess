@@ -167,27 +167,6 @@ else
     echo "Cron job added to root's crontab successfully."
 fi
 
-# XRDP.ini - change default X windows from Xvnc to Xorg
-# Enable [Xorg] block: uncomment the header and specific lines
-sudo sed -i '/^\s*#\[Xorg\]/ s/^#//' "$xrdp_ini"
-sudo sed -i '/^\[Xorg\]/,/^\[/ {
- s/^#\(name=Xorg\)/\1/
- s/^#\(lib=libxup.so\)/\1/
- s/^#\(username=ask\)/\1/
- s/^#\(password=ask\)/\1/
- s/^#\(port=-1\)/\1/
- s/^#\(code=20\)/\1/
-}' "$xrdp_ini"
-
-# Disable [Xvnc] block: comment the header and all non-comment lines
-sudo sed -i '/^\[Xvnc\]/ s/^\[Xvnc\]/#[Xvnc]/' "$xrdp_ini"
-sudo sed -i '/^#[Xvnc\]/,/^\[/ {
- s/^\([^\[#;].*\)/#\1/
-}' "$xrdp_ini"
-
-sudo systemctl restart xrdp
-echo "XRDP is configured with Xorg"
-
 # Creaet AVDUser and give limited sudo rights
 sudo useradd avdadmin
 cmds=(getent useradd userdel groupadd id usermod chpasswd chown chmod mount umount mkdir cp /usr/local/bin/create-user.sh)

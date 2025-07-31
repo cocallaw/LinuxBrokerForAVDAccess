@@ -107,6 +107,33 @@ logoff_user() {
     ) &
 }
 
+check_unmount_user_homes() {
+    log "Scanning for orphaned mounted user home directories."
+
+    # Get currently logged-in usernames
+    mapfile -t logged_in_users < <(loginctl list-users | awk 'NR > 1 {print $2}')
+
+    # Find only top-level /home/<user> mount points of type 'nfs' or 'nfs4'
+    while read -r device mountpoint fstype rest; do
+        # Match only mountpoints like /home/username (no subdirs)
+        if [[ "$mountpoint" =~ ^/home/[^/]+$ ]]; then
+            username=$(basename "$mountpoint")
+            # Only proceed if user is not logged in
+            if [[ ! " ${logged_in_users[*]} " =~ " ${username} " ]]; then
+                log "User $username is not logged in. Attempting to unmount $mountpoint"
+
+                if umount -l "$mountpoint"; then
+                    log "Successfully unmounted $mountpoint for user $username."
+                else
+                    log "Failed to unmount $mountpoint for user $username."
+                fi
+            else
+                log "User $username is still logged in. Skipping unmount."
+            fi
+        fi
+    done < <(mount | awk '$5 ~ /^nfs/ {print $1, $3, $5, $6}')
+}
+
 while true; do
     log "Checking XRDP session status."
 
@@ -159,6 +186,8 @@ while true; do
 
     printf "%s\n" "${current_users[@]}" > "$PREVIOUS_USERS_FILE"
 
+    check_unmount_user_homes
+    
     log "Sleeping for 60 seconds before next check."
     sleep 60
 done

@@ -116,12 +116,42 @@ def get_access_token(tenant_id, client_id, client_secret):
     else:
         response.raise_for_status()
 
+def get_or_create_uid(username):
+    try:
+        conn = get_db_connection()
+        if not conn:
+            return "Database connection failed.", 500
+
+        cursor = conn.cursor(as_dict=True)
+
+        # Check if user already exists
+        cursor.execute("SELECT uid FROM VmUsers WHERE username = %s", (username,))
+        result = cursor.fetchone()
+        if result:
+            conn.close()
+            return result['uid']
+
+        # Assign a new UID starting from 2000
+        cursor.execute("SELECT MAX(uid) AS max_uid FROM VmUsers")
+        max_uid = cursor.fetchone()['max_uid'] or 1999
+        new_uid = max_uid + 1
+
+        # Insert new user
+        cursor.execute("INSERT INTO VmUsers (username, uid) VALUES (%s, %s)", (username, new_uid))
+        conn.commit()
+        conn.close()
+
+        return new_uid
+    except Exception as e:
+        return f"An unexpected error occurred: {str(e)}", 500
+
 def create_or_update_remote_user(hostname: str, username: str, password: str) -> bool:
     pem_file_path = retrieve_pem_key_from_key_vault(VAULT_URL, KEY_NAME)
 
     try:
         host_fqdn = f"avdadmin@{hostname}.{DOMAIN_NAME}"
-        check_create_user_command = f"sudo id -u {username} >/dev/null 2>&1 || sudo useradd {username} -m"
+        uid = get_or_create_uid(username)
+        check_create_user_command = f"sudo /usr/local/bin/create-user.sh {NFS_SHARE} {uid} {username}"
         set_password_command = f"echo '{username}:{password}' | sudo chpasswd"
         command = f"{check_create_user_command} && {set_password_command}"
 

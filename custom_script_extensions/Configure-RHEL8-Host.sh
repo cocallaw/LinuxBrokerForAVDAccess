@@ -29,6 +29,8 @@ release_session_url="https://raw.githubusercontent.com/$GH_OWNER/LinuxBrokerForA
 xrdp_who_xorg_url="https://raw.githubusercontent.com/$GH_OWNER/LinuxBrokerForAVDAccess/refs/heads/$GH_BRANCH/linux_host/session_release_buffer/xrdp-who-xorg.sh"
 screensaver_settings_url="https://raw.githubusercontent.com/$GH_OWNER/LinuxBrokerForAVDAccess/refs/heads/$GH_BRANCH/linux_host/session_release_buffer/RHEL/00-screensaver"
 screensaver_locks_url="https://raw.githubusercontent.com/$GH_OWNER/LinuxBrokerForAVDAccess/refs/heads/$GH_BRANCH/linux_host/session_release_buffer/RHEL/screensaver"
+create_user_script_url="https://raw.githubusercontent.com/$GH_OWNER/LinuxBrokerForAVDAccess/refs/heads/$GH_BRANCH/linux_host/create-user.sh"
+create_user_script="/usr/local/bin/create-user.sh"
 xrdp_ini="/etc/xrdp/xrdp.ini"
 
 arch=$( /bin/arch )
@@ -165,30 +167,9 @@ else
     echo "Cron job added to root's crontab successfully."
 fi
 
-# XRDP.ini - change default X windows from Xvnc to Xorg
-# Enable [Xorg] block: uncomment the header and specific lines
-sudo sed -i '/^\s*#\[Xorg\]/ s/^#//' "$xrdp_ini"
-sudo sed -i '/^\[Xorg\]/,/^\[/ {
- s/^#\(name=Xorg\)/\1/
- s/^#\(lib=libxup.so\)/\1/
- s/^#\(username=ask\)/\1/
- s/^#\(password=ask\)/\1/
- s/^#\(port=-1\)/\1/
- s/^#\(code=20\)/\1/
-}' "$xrdp_ini"
-
-# Disable [Xvnc] block: comment the header and all non-comment lines
-sudo sed -i '/^\[Xvnc\]/ s/^\[Xvnc\]/#[Xvnc]/' "$xrdp_ini"
-sudo sed -i '/^#[Xvnc\]/,/^\[/ {
- s/^\([^\[#;].*\)/#\1/
-}' "$xrdp_ini"
-
-sudo systemctl restart xrdp
-echo "XRDP is configured with Xorg"
-
 # Creaet AVDUser and give limited sudo rights
 sudo useradd avdadmin
-cmds=(getent useradd userdel groupadd id usermod chpasswd)
+cmds=(getent useradd userdel groupadd id usermod chpasswd chown chmod mount umount mkdir cp /usr/local/bin/create-user.sh)
 full_paths=$(for cmd in "${cmds[@]}"; do command -v "$cmd"; done | paste -sd ',' -)
 echo "avdadmin ALL=(ALL) NOPASSWD: $full_paths" > avdadmin
 sudo cp avdadmin /etc/sudoers.d
@@ -201,6 +182,11 @@ echo "Downloading Gnome Desktop screen lock settings..."
 sudo wget -O "$dconf_local_directory/00-screensaver" "$screensaver_settings_url"
 sudo wget -O "$dconf_local_directory/locks/screensaver" "$screensaver_locks_url"
 sudo dconf update
+
+# Copy Unique User creation script
+echo "Downloading Gnome Desktop screen lock settings..."
+sudo wget -O "$create_user_script" "$create_user_script_url"
+sudo chmod +x $create_user_script
 
 # Complete
 echo "System configuration complete."

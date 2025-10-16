@@ -213,3 +213,7 @@ resource linuxCustomScriptExtension 'Microsoft.Compute/virtualMachines/extension
     ]
   }
 ]
+
+// Outputs
+output vmNames array = vmNames
+output adminUsername string = adminUsername

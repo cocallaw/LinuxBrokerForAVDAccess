@@ -315,3 +315,8 @@ resource linuxBrokerConfig 'Microsoft.Compute/virtualMachines/extensions@2024-11
     ]
   }
 ]
+
+// Outputs
+output hostPoolName string = hostPool.name
+output workspaceName string = workspace.name
+output vmNames array = vmNames

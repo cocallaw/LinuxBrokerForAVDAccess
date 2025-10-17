@@ -22,7 +22,15 @@ if (-not (Get-Module -ListAvailable -Name Microsoft.Graph)) {
 
 # Connect to Microsoft Graph
 Write-Host "Connecting to Microsoft Graph..." -ForegroundColor Yellow
-Connect-MgGraph -TenantId $TenantId -Scopes "Application.ReadWrite.All", "Directory.Read.All"
+Write-Host "A device code will be displayed. Please follow the instructions to authenticate." -ForegroundColor Cyan
+try {
+    Connect-MgGraph -TenantId $TenantId -Scopes "Application.ReadWrite.All", "Directory.Read.All" -UseDeviceAuthentication
+    Write-Host "✅ Successfully connected to Microsoft Graph" -ForegroundColor Green
+} catch {
+    Write-Error "Failed to connect to Microsoft Graph: $($_.Exception.Message)"
+    Write-Host "💡 Try running the script as administrator or check your network connection" -ForegroundColor Yellow
+    exit 1
+}
 
 # Create API App Registration
 Write-Host "Creating API App Registration..." -ForegroundColor Cyan
@@ -103,12 +111,33 @@ Write-Host "   ⚠️  Please save the client secret securely - it won't be show
 # Create Security Groups
 Write-Host "Creating Security Groups..." -ForegroundColor Cyan
 
-$avdHostGroup = New-MgGroup -DisplayName "LinuxBroker-AVDHost-VMs" -Description "Security group for AVD host managed identities" -MailEnabled:$false -SecurityEnabled:$true -MailNickname "LinuxBroker-AVDHost-VMs"
-$linuxHostGroup = New-MgGroup -DisplayName "LinuxBroker-LinuxHost-VMs" -Description "Security group for Linux host managed identities" -MailEnabled:$false -SecurityEnabled:$true -MailNickname "LinuxBroker-LinuxHost-VMs"
+$avdHostGroup = $null
+$linuxHostGroup = $null
 
-Write-Host "✅ Security Groups created successfully!" -ForegroundColor Green
-Write-Host "   AVD Host Group ID: $($avdHostGroup.Id)" -ForegroundColor White
-Write-Host "   Linux Host Group ID: $($linuxHostGroup.Id)" -ForegroundColor White
+try {
+    $avdHostGroup = New-MgGroup -DisplayName "LinuxBroker-AVDHost-VMs" -Description "Security group for AVD host managed identities" -MailEnabled:$false -SecurityEnabled:$true -MailNickname "LinuxBroker-AVDHost-VMs"
+    Write-Host "✅ AVD Host security group created successfully!" -ForegroundColor Green
+} catch {
+    Write-Host "❌ Failed to create AVD Host security group: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "   This requires Group.ReadWrite.All permissions or Global Administrator role" -ForegroundColor Yellow
+}
+
+try {
+    $linuxHostGroup = New-MgGroup -DisplayName "LinuxBroker-LinuxHost-VMs" -Description "Security group for Linux host managed identities" -MailEnabled:$false -SecurityEnabled:$true -MailNickname "LinuxBroker-LinuxHost-VMs"
+    Write-Host "✅ Linux Host security group created successfully!" -ForegroundColor Green
+} catch {
+    Write-Host "❌ Failed to create Linux Host security group: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "   This requires Group.ReadWrite.All permissions or Global Administrator role" -ForegroundColor Yellow
+}
+
+if ($avdHostGroup -or $linuxHostGroup) {
+    Write-Host "✅ Some security groups created successfully!" -ForegroundColor Green
+    if ($avdHostGroup) { Write-Host "   AVD Host Group ID: $($avdHostGroup.Id)" -ForegroundColor White }
+    if ($linuxHostGroup) { Write-Host "   Linux Host Group ID: $($linuxHostGroup.Id)" -ForegroundColor White }
+} else {
+    Write-Host "⚠️  No security groups were created due to insufficient permissions" -ForegroundColor Yellow
+    Write-Host "   You can create these manually in the Azure portal or ask an administrator to run this script" -ForegroundColor Cyan
+}
 
 # Output summary
 Write-Host ""
@@ -126,14 +155,35 @@ Write-Host "   Client Secret: $($clientSecret.SecretText)" -ForegroundColor Whit
 Write-Host "   Service Principal ID: $($frontendServicePrincipal.Id)" -ForegroundColor White
 Write-Host ""
 Write-Host "Security Groups:" -ForegroundColor Yellow
-Write-Host "   AVD Host Group: $($avdHostGroup.Id)" -ForegroundColor White
-Write-Host "   Linux Host Group: $($linuxHostGroup.Id)" -ForegroundColor White
+if ($avdHostGroup) {
+    Write-Host "   AVD Host Group: $($avdHostGroup.Id)" -ForegroundColor White
+} else {
+    Write-Host "   AVD Host Group: Not created (insufficient permissions)" -ForegroundColor Red
+}
+if ($linuxHostGroup) {
+    Write-Host "   Linux Host Group: $($linuxHostGroup.Id)" -ForegroundColor White
+} else {
+    Write-Host "   Linux Host Group: Not created (insufficient permissions)" -ForegroundColor Red
+}
 Write-Host ""
 Write-Host "🔧 Next Steps:" -ForegroundColor Green
 Write-Host "1. Update your App Service environment variables with these values" -ForegroundColor White
-Write-Host "2. Assign managed identities to the appropriate security groups" -ForegroundColor White
-Write-Host "3. Grant API permissions to the applications" -ForegroundColor White
-Write-Host "4. Test the configuration" -ForegroundColor White
+if (-not $avdHostGroup -or -not $linuxHostGroup) {
+    Write-Host "2. Create the missing security groups manually in Azure portal:" -ForegroundColor Yellow
+    if (-not $avdHostGroup) {
+        Write-Host "   - LinuxBroker-AVDHost-VMs (for AVD host managed identities)" -ForegroundColor White
+    }
+    if (-not $linuxHostGroup) {
+        Write-Host "   - LinuxBroker-LinuxHost-VMs (for Linux host managed identities)" -ForegroundColor White
+    }
+    Write-Host "3. Assign managed identities to the appropriate security groups" -ForegroundColor White
+    Write-Host "4. Grant API permissions to the applications" -ForegroundColor White
+    Write-Host "5. Test the configuration" -ForegroundColor White
+} else {
+    Write-Host "2. Assign managed identities to the appropriate security groups" -ForegroundColor White
+    Write-Host "3. Grant API permissions to the applications" -ForegroundColor White
+    Write-Host "4. Test the configuration" -ForegroundColor White
+}
 
 # Save configuration to file
 $config = @{
@@ -143,8 +193,8 @@ $config = @{
     FrontendAppId = $frontendApp.AppId
     FrontendClientSecret = $clientSecret.SecretText
     FrontendServicePrincipalId = $frontendServicePrincipal.Id
-    AVDHostGroupId = $avdHostGroup.Id
-    LinuxHostGroupId = $linuxHostGroup.Id
+    AVDHostGroupId = if ($avdHostGroup) { $avdHostGroup.Id } else { "NOT_CREATED" }
+    LinuxHostGroupId = if ($linuxHostGroup) { $linuxHostGroup.Id } else { "NOT_CREATED" }
 }
 
 $config | ConvertTo-Json -Depth 3 | Out-File -FilePath "./app-registration-config.json" -Encoding UTF8

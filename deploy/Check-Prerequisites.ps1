@@ -17,8 +17,9 @@ $info = @()
 
 # Check Azure CLI
 try {
-    $azVersion = az version --output tsv --query '"azure-cli"' 2>$null
-    if ($azVersion) {
+    $azVersionJson = az version --output json 2>$null | ConvertFrom-Json
+    if ($azVersionJson -and $azVersionJson.'azure-cli') {
+        $azVersion = $azVersionJson.'azure-cli'
         Write-Host "✅ Azure CLI: $azVersion" -ForegroundColor Green
     } else {
         $errors += "Azure CLI not found. Install from: https://docs.microsoft.com/cli/azure/install-azure-cli"
@@ -41,9 +42,15 @@ try {
 
 # Check Azure Functions Core Tools
 try {
-    $funcVersion = func --version 2>$null
-    if ($funcVersion) {
-        Write-Host "✅ Azure Functions Core Tools: $funcVersion" -ForegroundColor Green
+    $funcVersion = $null
+    $funcCommand = Get-Command func -ErrorAction SilentlyContinue
+    if ($funcCommand) {
+        $funcVersion = func --version 2>$null
+        if ($funcVersion) {
+            Write-Host "✅ Azure Functions Core Tools: $funcVersion" -ForegroundColor Green
+        } else {
+            $warnings += "Azure Functions Core Tools found but version check failed"
+        }
     } else {
         $warnings += "Azure Functions Core Tools not found. Install from: https://docs.microsoft.com/azure/azure-functions/functions-run-local"
     }

@@ -88,7 +88,29 @@ try {
     
     # Deploy database schema
     Write-Host "Setting up database schema..." -ForegroundColor Yellow
-    $connectionString = "Server=$($sqlServerName).database.windows.net;Database=$databaseName;Authentication=Active Directory Default;"
+    
+    # Get current public IP for firewall rule
+    Write-Host "Getting current public IP address..." -ForegroundColor Cyan
+    try {
+        $currentIp = (Invoke-RestMethod -Uri "https://ipinfo.io/ip" -TimeoutSec 10).Trim()
+        Write-Host "Current IP: $currentIp" -ForegroundColor White
+        
+        # Add temporary firewall rule for current IP
+        Write-Host "Adding temporary firewall rule..." -ForegroundColor Cyan
+        az sql server firewall-rule create `
+            --resource-group $ResourceGroupName `
+            --server $sqlServerName `
+            --name "TempDeploymentRule" `
+            --start-ip-address $currentIp `
+            --end-ip-address $currentIp
+            
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Failed to add firewall rule. SQL scripts may fail."
+        }
+    } catch {
+        Write-Warning "Could not determine current IP address. SQL scripts may fail: $($_.Exception.Message)"
+        $currentIp = $null
+    }
     
     # Run SQL scripts in order
     Get-ChildItem "./sql_queries/*.sql" | Sort-Object Name | ForEach-Object {
@@ -100,6 +122,20 @@ try {
             }
         } catch {
             Write-Warning "Error executing $($_.Name): $($_.Exception.Message)"
+        }
+    }
+    
+    # Remove temporary firewall rule
+    if ($currentIp) {
+        Write-Host "Removing temporary firewall rule..." -ForegroundColor Cyan
+        try {
+            az sql server firewall-rule delete `
+                --resource-group $ResourceGroupName `
+                --server $sqlServerName `
+                --name "TempDeploymentRule" `
+                --yes
+        } catch {
+            Write-Warning "Could not remove temporary firewall rule. Please remove 'TempDeploymentRule' manually."
         }
     }
 

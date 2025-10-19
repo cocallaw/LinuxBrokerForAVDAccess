@@ -64,10 +64,10 @@ try {
     if ($sqlcmdVersion) {
         Write-Host "✅ SQL Command Line Tools available" -ForegroundColor Green
     } else {
-        $warnings += "SQLCMD not found. Install SQL Server Command Line Tools for database deployment"
+        $warnings += "SQLCMD not found. Install from: https://learn.microsoft.com/sql/tools/sqlcmd/sqlcmd-download-install"
     }
 } catch {
-    $warnings += "SQLCMD not found. Install SQL Server Command Line Tools for database deployment"
+    $warnings += "SQLCMD not found. Install from: https://learn.microsoft.com/sql/tools/sqlcmd/sqlcmd-download-install"
 }
 
 # Check Azure login status

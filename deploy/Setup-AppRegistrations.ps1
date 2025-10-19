@@ -9,10 +9,30 @@ param(
     [string]$ApiAppName = "LinuxBroker-API",
     
     [Parameter(Mandatory=$false)]
-    [string]$FrontendAppName = "LinuxBroker-Frontend"
+    [string]$FrontendAppName = "LinuxBroker-Frontend",
+    
+    [Parameter(Mandatory=$false)]
+    [string]$DeploymentId = ""
 )
 
 Write-Host "🔐 Setting up Azure AD App Registrations..." -ForegroundColor Green
+
+# Generate deployment ID if not provided
+if ([string]::IsNullOrEmpty($DeploymentId)) {
+    $DeploymentId = -join ((48..57) + (97..122) | Get-Random -Count 6 | ForEach-Object { [char]$_ })
+    Write-Host "📝 Generated Deployment ID: $DeploymentId" -ForegroundColor Yellow
+    Write-Host "   This will be appended to app registration names for easy identification" -ForegroundColor Cyan
+} else {
+    Write-Host "📝 Using provided Deployment ID: $DeploymentId" -ForegroundColor Yellow
+}
+
+# Update app names with deployment ID
+$ApiAppName = "$ApiAppName-$DeploymentId"
+$FrontendAppName = "$FrontendAppName-$DeploymentId"
+
+Write-Host "App Registration Names:" -ForegroundColor Cyan
+Write-Host "   API App: $ApiAppName" -ForegroundColor White
+Write-Host "   Frontend App: $FrontendAppName" -ForegroundColor White
 
 # Check if Microsoft Graph PowerShell module is installed
 if (-not (Get-Module -ListAvailable -Name Microsoft.Graph)) {
@@ -114,8 +134,11 @@ Write-Host "Creating Security Groups..." -ForegroundColor Cyan
 $avdHostGroup = $null
 $linuxHostGroup = $null
 
+$avdHostGroupName = "LinuxBroker-AVDHost-VMs-$DeploymentId"
+$linuxHostGroupName = "LinuxBroker-LinuxHost-VMs-$DeploymentId"
+
 try {
-    $avdHostGroup = New-MgGroup -DisplayName "LinuxBroker-AVDHost-VMs" -Description "Security group for AVD host managed identities" -MailEnabled:$false -SecurityEnabled:$true -MailNickname "LinuxBroker-AVDHost-VMs"
+    $avdHostGroup = New-MgGroup -DisplayName $avdHostGroupName -Description "Security group for AVD host managed identities (Deployment: $DeploymentId)" -MailEnabled:$false -SecurityEnabled:$true -MailNickname $avdHostGroupName
     Write-Host "✅ AVD Host security group created successfully!" -ForegroundColor Green
 } catch {
     Write-Host "❌ Failed to create AVD Host security group: $($_.Exception.Message)" -ForegroundColor Red
@@ -123,7 +146,7 @@ try {
 }
 
 try {
-    $linuxHostGroup = New-MgGroup -DisplayName "LinuxBroker-LinuxHost-VMs" -Description "Security group for Linux host managed identities" -MailEnabled:$false -SecurityEnabled:$true -MailNickname "LinuxBroker-LinuxHost-VMs"
+    $linuxHostGroup = New-MgGroup -DisplayName $linuxHostGroupName -Description "Security group for Linux host managed identities (Deployment: $DeploymentId)" -MailEnabled:$false -SecurityEnabled:$true -MailNickname $linuxHostGroupName
     Write-Host "✅ Linux Host security group created successfully!" -ForegroundColor Green
 } catch {
     Write-Host "❌ Failed to create Linux Host security group: $($_.Exception.Message)" -ForegroundColor Red
@@ -143,6 +166,8 @@ if ($avdHostGroup -or $linuxHostGroup) {
 Write-Host ""
 Write-Host "📋 App Registration Summary:" -ForegroundColor Cyan
 Write-Host "================================" -ForegroundColor Cyan
+Write-Host "Deployment ID: $DeploymentId" -ForegroundColor Magenta
+Write-Host ""
 Write-Host "API App Registration:" -ForegroundColor Yellow
 Write-Host "   Name: $ApiAppName" -ForegroundColor White
 Write-Host "   App ID: $($apiApp.AppId)" -ForegroundColor White
@@ -156,12 +181,12 @@ Write-Host "   Service Principal ID: $($frontendServicePrincipal.Id)" -Foregroun
 Write-Host ""
 Write-Host "Security Groups:" -ForegroundColor Yellow
 if ($avdHostGroup) {
-    Write-Host "   AVD Host Group: $($avdHostGroup.Id)" -ForegroundColor White
+    Write-Host "   AVD Host Group: $($avdHostGroup.Id) ($avdHostGroupName)" -ForegroundColor White
 } else {
     Write-Host "   AVD Host Group: Not created (insufficient permissions)" -ForegroundColor Red
 }
 if ($linuxHostGroup) {
-    Write-Host "   Linux Host Group: $($linuxHostGroup.Id)" -ForegroundColor White
+    Write-Host "   Linux Host Group: $($linuxHostGroup.Id) ($linuxHostGroupName)" -ForegroundColor White
 } else {
     Write-Host "   Linux Host Group: Not created (insufficient permissions)" -ForegroundColor Red
 }
@@ -187,17 +212,24 @@ if (-not $avdHostGroup -or -not $linuxHostGroup) {
 
 # Save configuration to file
 $config = @{
+    DeploymentId = $DeploymentId
     TenantId = $TenantId
     ApiAppId = $apiApp.AppId
+    ApiAppName = $ApiAppName
     ApiServicePrincipalId = $apiServicePrincipal.Id
     FrontendAppId = $frontendApp.AppId
+    FrontendAppName = $FrontendAppName
     FrontendClientSecret = $clientSecret.SecretText
     FrontendServicePrincipalId = $frontendServicePrincipal.Id
     AVDHostGroupId = if ($avdHostGroup) { $avdHostGroup.Id } else { "NOT_CREATED" }
+    AVDHostGroupName = $avdHostGroupName
     LinuxHostGroupId = if ($linuxHostGroup) { $linuxHostGroup.Id } else { "NOT_CREATED" }
+    LinuxHostGroupName = $linuxHostGroupName
 }
 
 $config | ConvertTo-Json -Depth 3 | Out-File -FilePath "./app-registration-config.json" -Encoding UTF8
 Write-Host "💾 Configuration saved to: ./app-registration-config.json" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "🧹 For easy cleanup, search for resources with deployment ID: $DeploymentId" -ForegroundColor Magenta
 
 Disconnect-MgGraph

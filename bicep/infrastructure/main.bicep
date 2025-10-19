@@ -18,6 +18,7 @@ param keyVaultAccessPrincipalId string = ''
 
 var resourcePrefix = '${projectName}-${environment}'
 var uniqueSuffix = substring(uniqueString(resourceGroup().id), 0, 6)
+var keyVaultName = '${replace(projectName, '-', '')}${environment}kv${uniqueSuffix}'
 
 // SQL Server and Database
 resource sqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = {
@@ -57,7 +58,7 @@ resource sqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = {
 
 // Key Vault
 resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
-  name: '${resourcePrefix}-kv-${uniqueSuffix}'
+  name: keyVaultName
   location: location
   tags: tags
   properties: {

@@ -34,7 +34,8 @@ Write-Host "🚀 Starting Linux Broker for AVD Access deployment..." -Foreground
 
 # Generate random password if not provided
 if ([string]::IsNullOrEmpty($SqlAdminPassword)) {
-    $SqlAdminPassword = -join ((33..126) | Get-Random -Count 16 | ForEach-Object { [char]$_ })
+    # Generate password with alphanumeric characters and safe symbols only
+    $SqlAdminPassword = -join ((48..57) + (65..90) + (97..122) + @(33,35,36,37,38,42,43,45,61,63,64) | Get-Random -Count 16 | ForEach-Object { [char]$_ })
     Write-Host "📝 Generated SQL Admin Password: $SqlAdminPassword" -ForegroundColor Yellow
     Write-Host "⚠️  Please save this password securely!" -ForegroundColor Red
 }
@@ -49,23 +50,12 @@ az group create --name $ResourceGroupName --location $Location
 
 # Deploy main Bicep template
 Write-Host "Deploying infrastructure..." -ForegroundColor Yellow
-$deploymentParams = @{
-    projectName = $ProjectName
-    environment = $Environment
-    sqlAdminPassword = $SqlAdminPassword
-    deployAVD = $DeployAVD
-    deployLinuxVMs = $DeployLinuxVMs
-}
-
-# Convert to JSON for Azure CLI
-$paramsJson = $deploymentParams | ConvertTo-Json -Compress
-$paramsJson | Out-File -FilePath "./temp-params.json" -Encoding UTF8
 
 try {
     $deploymentResult = az deployment group create `
         --resource-group $ResourceGroupName `
         --template-file "./bicep/main.bicep" `
-        --parameters "@./temp-params.json" `
+        --parameters projectName=$ProjectName environment=$Environment sqlAdminPassword=$SqlAdminPassword deployAVD=$($DeployAVD.ToString().ToLower()) deployLinuxVMs=$($DeployLinuxVMs.ToString().ToLower()) `
         --name $DeploymentName `
         --output json | ConvertFrom-Json
 

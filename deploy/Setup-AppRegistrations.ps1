@@ -24,7 +24,7 @@ if (-not (Get-Module -ListAvailable -Name Microsoft.Graph)) {
 Write-Host "Connecting to Microsoft Graph..." -ForegroundColor Yellow
 Write-Host "A device code will be displayed. Please follow the instructions to authenticate." -ForegroundColor Cyan
 try {
-    Connect-MgGraph -TenantId $TenantId -Scopes "Application.ReadWrite.All", "Directory.Read.All" -UseDeviceAuthentication
+    Connect-MgGraph -TenantId $TenantId -Scopes "Application.ReadWrite.All", "Directory.Read.All", "Group.ReadWrite.All" -UseDeviceAuthentication
     Write-Host "✅ Successfully connected to Microsoft Graph" -ForegroundColor Green
 } catch {
     Write-Error "Failed to connect to Microsoft Graph: $($_.Exception.Message)"

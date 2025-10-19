@@ -54,79 +54,151 @@ try {
 
 # Create API App Registration
 Write-Host "Creating API App Registration..." -ForegroundColor Cyan
-$apiApp = New-MgApplication -DisplayName $ApiAppName -Description "Linux Broker for AVD - API Application"
+$apiApp = $null
+$apiServicePrincipal = $null
+$apiAppRoleUpdateSuccess = $false
 
-# Create API App Service Principal
-$apiServicePrincipal = New-MgServicePrincipal -AppId $apiApp.AppId
-
-# Create API App Roles
-$apiAppRoles = @(
-    @{
-        AllowedMemberTypes = @("Application")
-        Description = "Allows access to AVD Host endpoints"
-        DisplayName = "AVD Host"
-        Id = [System.Guid]::NewGuid()
-        IsEnabled = $true
-        Value = "AVDHost"
-    },
-    @{
-        AllowedMemberTypes = @("Application")
-        Description = "Allows access to Linux Host endpoints"
-        DisplayName = "Linux Host"
-        Id = [System.Guid]::NewGuid()
-        IsEnabled = $true
-        Value = "LinuxHost"
-    },
-    @{
-        AllowedMemberTypes = @("Application")
-        Description = "Allows access to scheduled task endpoints"
-        DisplayName = "Scheduled Task"
-        Id = [System.Guid]::NewGuid()
-        IsEnabled = $true
-        Value = "ScheduledTask"
-    },
-    @{
-        AllowedMemberTypes = @("User")
-        Description = "Allows full access to the management portal"
-        DisplayName = "Full Access"
-        Id = [System.Guid]::NewGuid()
-        IsEnabled = $true
-        Value = "FullAccess"
-    },
-    @{
-        AllowedMemberTypes = @("User")
-        Description = "Allows user access to the management portal"
-        DisplayName = "User"
-        Id = [System.Guid]::NewGuid()
-        IsEnabled = $true
-        Value = "User"
+try {
+    $apiApp = New-MgApplication -DisplayName $ApiAppName -Description "Linux Broker for AVD - API Application"
+    if ($apiApp -and $apiApp.AppId) {
+        Write-Host "✅ API App created successfully!" -ForegroundColor Green
+        
+        # Create API App Service Principal
+        try {
+            $apiServicePrincipal = New-MgServicePrincipal -AppId $apiApp.AppId
+            Write-Host "✅ API Service Principal created successfully!" -ForegroundColor Green
+        } catch {
+            Write-Host "❌ Failed to create API Service Principal: $($_.Exception.Message)" -ForegroundColor Red
+        }
+        
+        # Create and assign API App Roles
+        try {
+            $apiAppRoles = @(
+                @{
+                    AllowedMemberTypes = @("Application")
+                    Description = "Allows access to AVD Host endpoints"
+                    DisplayName = "AVD Host"
+                    Id = [System.Guid]::NewGuid()
+                    IsEnabled = $true
+                    Value = "AVDHost"
+                },
+                @{
+                    AllowedMemberTypes = @("Application")
+                    Description = "Allows access to Linux Host endpoints"
+                    DisplayName = "Linux Host"
+                    Id = [System.Guid]::NewGuid()
+                    IsEnabled = $true
+                    Value = "LinuxHost"
+                },
+                @{
+                    AllowedMemberTypes = @("Application")
+                    Description = "Allows access to scheduled task endpoints"
+                    DisplayName = "Scheduled Task"
+                    Id = [System.Guid]::NewGuid()
+                    IsEnabled = $true
+                    Value = "ScheduledTask"
+                },
+                @{
+                    AllowedMemberTypes = @("User")
+                    Description = "Allows full access to the management portal"
+                    DisplayName = "Full Access"
+                    Id = [System.Guid]::NewGuid()
+                    IsEnabled = $true
+                    Value = "FullAccess"
+                },
+                @{
+                    AllowedMemberTypes = @("User")
+                    Description = "Allows user access to the management portal"
+                    DisplayName = "User"
+                    Id = [System.Guid]::NewGuid()
+                    IsEnabled = $true
+                    Value = "User"
+                }
+            )
+            
+            Update-MgApplication -ApplicationId $apiApp.Id -AppRoles $apiAppRoles
+            $apiAppRoleUpdateSuccess = $true
+            Write-Host "✅ API App Roles configured successfully!" -ForegroundColor Green
+        } catch {
+            Write-Host "❌ Failed to configure API App Roles: $($_.Exception.Message)" -ForegroundColor Red
+        }
+    } else {
+        Write-Host "❌ API App creation returned null or invalid response" -ForegroundColor Red
     }
-)
+} catch {
+    Write-Host "❌ Failed to create API App Registration: $($_.Exception.Message)" -ForegroundColor Red
+    if ($_.Exception.Message -like "*authentication failed*") {
+        Write-Host "💡 This appears to be an authentication issue. Try reconnecting or using a different authentication method." -ForegroundColor Yellow
+    }
+}
 
-# Update API App with App Roles
-Update-MgApplication -ApplicationId $apiApp.Id -AppRoles $apiAppRoles
-
-Write-Host "✅ API App Registration created successfully!" -ForegroundColor Green
-Write-Host "   App ID: $($apiApp.AppId)" -ForegroundColor White
-Write-Host "   Object ID: $($apiApp.Id)" -ForegroundColor White
+if ($apiApp -and $apiApp.AppId) {
+    Write-Host "✅ API App Registration completed!" -ForegroundColor Green
+    Write-Host "   App ID: $($apiApp.AppId)" -ForegroundColor White
+    Write-Host "   Object ID: $($apiApp.Id)" -ForegroundColor White
+} else {
+    Write-Host "❌ API App Registration failed!" -ForegroundColor Red
+    Write-Host "   App ID: FAILED_TO_CREATE" -ForegroundColor Red
+    Write-Host "   Object ID: FAILED_TO_CREATE" -ForegroundColor Red
+}
 
 # Create Frontend App Registration
 Write-Host "Creating Frontend App Registration..." -ForegroundColor Cyan
-$frontendApp = New-MgApplication -DisplayName $FrontendAppName -Description "Linux Broker for AVD - Frontend Application"
+$frontendApp = $null
+$frontendServicePrincipal = $null
+$clientSecret = $null
 
-# Create Frontend App Service Principal
-$frontendServicePrincipal = New-MgServicePrincipal -AppId $frontendApp.AppId
-
-# Generate client secret for frontend app
-$clientSecret = Add-MgApplicationPassword -ApplicationId $frontendApp.Id -PasswordCredential @{
-    DisplayName = "Default Secret"
-    EndDateTime = (Get-Date).AddYears(2)
+try {
+    $frontendApp = New-MgApplication -DisplayName $FrontendAppName -Description "Linux Broker for AVD - Frontend Application"
+    if ($frontendApp -and $frontendApp.AppId) {
+        Write-Host "✅ Frontend App created successfully!" -ForegroundColor Green
+        
+        # Create Frontend App Service Principal
+        try {
+            $frontendServicePrincipal = New-MgServicePrincipal -AppId $frontendApp.AppId
+            Write-Host "✅ Frontend Service Principal created successfully!" -ForegroundColor Green
+        } catch {
+            Write-Host "❌ Failed to create Frontend Service Principal: $($_.Exception.Message)" -ForegroundColor Red
+        }
+        
+        # Generate client secret for frontend app
+        try {
+            $clientSecret = Add-MgApplicationPassword -ApplicationId $frontendApp.Id -PasswordCredential @{
+                DisplayName = "Default Secret"
+                EndDateTime = (Get-Date).AddYears(2)
+            }
+            if ($clientSecret -and $clientSecret.SecretText) {
+                Write-Host "✅ Client Secret generated successfully!" -ForegroundColor Green
+            } else {
+                Write-Host "❌ Client Secret generation returned null or invalid response" -ForegroundColor Red
+            }
+        } catch {
+            Write-Host "❌ Failed to generate Client Secret: $($_.Exception.Message)" -ForegroundColor Red
+        }
+    } else {
+        Write-Host "❌ Frontend App creation returned null or invalid response" -ForegroundColor Red
+    }
+} catch {
+    Write-Host "❌ Failed to create Frontend App Registration: $($_.Exception.Message)" -ForegroundColor Red
+    if ($_.Exception.Message -like "*authentication failed*") {
+        Write-Host "💡 This appears to be an authentication issue. Try reconnecting or using a different authentication method." -ForegroundColor Yellow
+    }
 }
 
-Write-Host "✅ Frontend App Registration created successfully!" -ForegroundColor Green
-Write-Host "   App ID: $($frontendApp.AppId)" -ForegroundColor White
-Write-Host "   Client Secret: $($clientSecret.SecretText)" -ForegroundColor Yellow
-Write-Host "   ⚠️  Please save the client secret securely - it won't be shown again!" -ForegroundColor Red
+if ($frontendApp -and $frontendApp.AppId) {
+    Write-Host "✅ Frontend App Registration completed!" -ForegroundColor Green
+    Write-Host "   App ID: $($frontendApp.AppId)" -ForegroundColor White
+    if ($clientSecret -and $clientSecret.SecretText) {
+        Write-Host "   Client Secret: $($clientSecret.SecretText)" -ForegroundColor Yellow
+        Write-Host "   ⚠️  Please save the client secret securely - it won't be shown again!" -ForegroundColor Red
+    } else {
+        Write-Host "   Client Secret: FAILED_TO_CREATE" -ForegroundColor Red
+    }
+} else {
+    Write-Host "❌ Frontend App Registration failed!" -ForegroundColor Red
+    Write-Host "   App ID: FAILED_TO_CREATE" -ForegroundColor Red
+    Write-Host "   Client Secret: FAILED_TO_CREATE" -ForegroundColor Red
+}
 
 # Create Security Groups
 Write-Host "Creating Security Groups..." -ForegroundColor Cyan
@@ -170,14 +242,25 @@ Write-Host "Deployment ID: $DeploymentId" -ForegroundColor Magenta
 Write-Host ""
 Write-Host "API App Registration:" -ForegroundColor Yellow
 Write-Host "   Name: $ApiAppName" -ForegroundColor White
-Write-Host "   App ID: $($apiApp.AppId)" -ForegroundColor White
-Write-Host "   Service Principal ID: $($apiServicePrincipal.Id)" -ForegroundColor White
+if ($apiApp -and $apiApp.AppId) {
+    Write-Host "   App ID: $($apiApp.AppId)" -ForegroundColor White
+    Write-Host "   Service Principal ID: $(if ($apiServicePrincipal) { $apiServicePrincipal.Id } else { 'FAILED_TO_CREATE' })" -ForegroundColor White
+} else {
+    Write-Host "   App ID: FAILED_TO_CREATE" -ForegroundColor Red
+    Write-Host "   Service Principal ID: FAILED_TO_CREATE" -ForegroundColor Red
+}
 Write-Host ""
 Write-Host "Frontend App Registration:" -ForegroundColor Yellow
 Write-Host "   Name: $FrontendAppName" -ForegroundColor White
-Write-Host "   App ID: $($frontendApp.AppId)" -ForegroundColor White
-Write-Host "   Client Secret: $($clientSecret.SecretText)" -ForegroundColor White
-Write-Host "   Service Principal ID: $($frontendServicePrincipal.Id)" -ForegroundColor White
+if ($frontendApp -and $frontendApp.AppId) {
+    Write-Host "   App ID: $($frontendApp.AppId)" -ForegroundColor White
+    Write-Host "   Client Secret: $(if ($clientSecret -and $clientSecret.SecretText) { $clientSecret.SecretText } else { 'FAILED_TO_CREATE' })" -ForegroundColor White
+    Write-Host "   Service Principal ID: $(if ($frontendServicePrincipal) { $frontendServicePrincipal.Id } else { 'FAILED_TO_CREATE' })" -ForegroundColor White
+} else {
+    Write-Host "   App ID: FAILED_TO_CREATE" -ForegroundColor Red
+    Write-Host "   Client Secret: FAILED_TO_CREATE" -ForegroundColor Red
+    Write-Host "   Service Principal ID: FAILED_TO_CREATE" -ForegroundColor Red
+}
 Write-Host ""
 Write-Host "Security Groups:" -ForegroundColor Yellow
 if ($avdHostGroup) {
@@ -214,13 +297,13 @@ if (-not $avdHostGroup -or -not $linuxHostGroup) {
 $config = @{
     DeploymentId = $DeploymentId
     TenantId = $TenantId
-    ApiAppId = $apiApp.AppId
+    ApiAppId = if ($apiApp -and $apiApp.AppId) { $apiApp.AppId } else { "FAILED_TO_CREATE" }
     ApiAppName = $ApiAppName
-    ApiServicePrincipalId = $apiServicePrincipal.Id
-    FrontendAppId = $frontendApp.AppId
+    ApiServicePrincipalId = if ($apiServicePrincipal -and $apiServicePrincipal.Id) { $apiServicePrincipal.Id } else { "FAILED_TO_CREATE" }
+    FrontendAppId = if ($frontendApp -and $frontendApp.AppId) { $frontendApp.AppId } else { "FAILED_TO_CREATE" }
     FrontendAppName = $FrontendAppName
-    FrontendClientSecret = $clientSecret.SecretText
-    FrontendServicePrincipalId = $frontendServicePrincipal.Id
+    FrontendClientSecret = if ($clientSecret -and $clientSecret.SecretText) { $clientSecret.SecretText } else { "FAILED_TO_CREATE" }
+    FrontendServicePrincipalId = if ($frontendServicePrincipal -and $frontendServicePrincipal.Id) { $frontendServicePrincipal.Id } else { "FAILED_TO_CREATE" }
     AVDHostGroupId = if ($avdHostGroup) { $avdHostGroup.Id } else { "NOT_CREATED" }
     AVDHostGroupName = $avdHostGroupName
     LinuxHostGroupId = if ($linuxHostGroup) { $linuxHostGroup.Id } else { "NOT_CREATED" }
@@ -229,6 +312,22 @@ $config = @{
 
 $config | ConvertTo-Json -Depth 3 | Out-File -FilePath "./app-registration-config.json" -Encoding UTF8
 Write-Host "💾 Configuration saved to: ./app-registration-config.json" -ForegroundColor Cyan
+
+# Show overall status
+$hasFailures = ($config.ApiAppId -eq "FAILED_TO_CREATE") -or ($config.FrontendAppId -eq "FAILED_TO_CREATE") -or ($config.FrontendClientSecret -eq "FAILED_TO_CREATE")
+if ($hasFailures) {
+    Write-Host ""
+    Write-Host "⚠️  SOME OPERATIONS FAILED" -ForegroundColor Red
+    Write-Host "   Please check the errors above and try again or create the failed resources manually" -ForegroundColor Yellow
+    Write-Host "   Common causes:" -ForegroundColor Cyan
+    Write-Host "   • Authentication session expired - try reconnecting" -ForegroundColor White
+    Write-Host "   • Insufficient permissions - ensure you have Application.ReadWrite.All" -ForegroundColor White
+    Write-Host "   • Network connectivity issues" -ForegroundColor White
+} else {
+    Write-Host ""
+    Write-Host "🎉 ALL OPERATIONS COMPLETED SUCCESSFULLY!" -ForegroundColor Green
+}
+
 Write-Host ""
 Write-Host "🧹 For easy cleanup, search for resources with deployment ID: $DeploymentId" -ForegroundColor Magenta
 

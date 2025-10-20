@@ -48,6 +48,47 @@ az account set --subscription $SubscriptionId
 Write-Host "Ensuring resource group exists..." -ForegroundColor Yellow
 az group create --name $ResourceGroupName --location $Location
 
+# Check for and handle soft-deleted Key Vault
+Write-Host "Checking for existing Key Vault..." -ForegroundColor Yellow
+
+# Check for any soft-deleted Key Vaults that might conflict with our naming pattern
+try {
+    $keyVaultPattern = "$($ProjectName.Replace('-', ''))$($Environment)kv*"
+    Write-Host "Checking for Key Vaults matching pattern: $keyVaultPattern" -ForegroundColor Cyan
+    
+    $deletedKeyVaults = az keyvault list-deleted --output json | ConvertFrom-Json
+    $conflictingVaults = $deletedKeyVaults | Where-Object { $_.name -like "$($ProjectName.Replace('-', ''))$($Environment)kv*" }
+    
+    if ($conflictingVaults -and $conflictingVaults.Count -gt 0) {
+        Write-Host "Found $($conflictingVaults.Count) potentially conflicting soft-deleted Key Vault(s)" -ForegroundColor Yellow
+        
+        foreach ($vault in $conflictingVaults) {
+            Write-Host "Purging soft-deleted Key Vault: $($vault.name)" -ForegroundColor Yellow
+            $location = $vault.properties.location
+            
+            az keyvault purge --name $vault.name --location $location
+            
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "✅ Successfully purged soft-deleted Key Vault: $($vault.name)" -ForegroundColor Green
+            } else {
+                Write-Warning "Failed to purge soft-deleted Key Vault: $($vault.name)"
+            }
+        }
+        
+        # Wait longer for purge operations to complete
+        Write-Host "Waiting for purge operations to complete..." -ForegroundColor Yellow
+        Start-Sleep -Seconds 30
+        
+    } else {
+        Write-Host "✅ No conflicting soft-deleted Key Vaults found" -ForegroundColor Green
+    }
+} catch {
+    Write-Warning "Could not check for soft-deleted Key Vaults: $($_.Exception.Message)"
+    Write-Host "💡 If deployment fails due to Key Vault conflict, manually purge using:" -ForegroundColor Yellow
+    Write-Host "   az keyvault list-deleted" -ForegroundColor White
+    Write-Host "   az keyvault purge --name <vault-name> --location <location>" -ForegroundColor White
+}
+
 # Deploy main Bicep template
 Write-Host "Deploying infrastructure..." -ForegroundColor Yellow
 

@@ -277,10 +277,77 @@ try {
     Write-TimestampedHost "Deploying Function application..." -ForegroundColor Cyan
     try {
         Set-Location "./task"
-        func azure functionapp publish $functionAppName
+        
+        # Check if func command is available
+        $funcAvailable = $false
+        try {
+            func --version | Out-Null
+            $funcAvailable = ($LASTEXITCODE -eq 0)
+        } catch {
+            $funcAvailable = $false
+        }
+        
+        if ($funcAvailable) {
+            # Deploy using func command with Python runtime specification
+            Write-TimestampedHost "Using Azure Functions Core Tools for deployment..." -ForegroundColor Cyan
+            func azure functionapp publish $functionAppName --python --build remote --force
+            
+            if ($LASTEXITCODE -eq 0) {
+                Write-TimestampedHost "✅ Function app deployed successfully using func command" -ForegroundColor Green
+            } else {
+                Write-Warning "Function deployment via func command failed, trying alternative method..."
+                throw "func deployment failed"
+            }
+        } else {
+            throw "func command not available"
+        }
+        
         Set-Location ".."
     } catch {
-        Write-Warning "Function deployment failed. Please deploy manually using: func azure functionapp publish $functionAppName"
+        Set-Location ".." -ErrorAction SilentlyContinue
+        Write-TimestampedHost "Attempting alternative deployment method..." -ForegroundColor Yellow
+        
+        try {
+            # Alternative: Create zip package and deploy via Azure CLI
+            Write-TimestampedHost "Creating function app package..." -ForegroundColor Cyan
+            Set-Location "./task"
+            
+            # Create a temporary zip file for deployment
+            $tempZip = "../function_app.zip"
+            
+            # Exclude certain files from the package
+            $excludeItems = @(".git", ".vscode", ".funcignore", "local.settings.json", "*.zip")
+            $items = Get-ChildItem -Path "." | Where-Object { 
+                $exclude = $false
+                foreach ($pattern in $excludeItems) {
+                    if ($_.Name -like $pattern) {
+                        $exclude = $true
+                        break
+                    }
+                }
+                -not $exclude
+            }
+            
+            Compress-Archive -Path $items -DestinationPath $tempZip -Force
+            Set-Location ".."
+            
+            # Deploy using Azure CLI
+            Write-TimestampedHost "Deploying function app package via Azure CLI..." -ForegroundColor Cyan
+            az functionapp deployment source config-zip --resource-group $ResourceGroupName --name $functionAppName --src $tempZip
+            
+            if ($LASTEXITCODE -eq 0) {
+                Write-TimestampedHost "✅ Function app deployed successfully using Azure CLI" -ForegroundColor Green
+            } else {
+                Write-Warning "Function app deployment failed via Azure CLI as well"
+            }
+            
+            # Clean up
+            Remove-Item $tempZip -Force -ErrorAction SilentlyContinue
+            
+        } catch {
+            Write-Warning "Function deployment failed with both methods. Please deploy manually using: func azure functionapp publish $functionAppName --python"
+            Write-Warning "Error details: $($_.Exception.Message)"
+        }
     }
 
     Write-TimestampedHost "✅ Deployment completed successfully!" -ForegroundColor Green

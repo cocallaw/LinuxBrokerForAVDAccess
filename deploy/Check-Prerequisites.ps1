@@ -264,8 +264,14 @@ if ($errors.Count -gt 0) {
 }
 
 Write-Host "`n💡 QUICK START COMMANDS:" -ForegroundColor Magenta
-Write-Host "   Setup Azure AD:      .\deploy\Setup-AppRegistrations.ps1 -TenantId <your-tenant-id>" -ForegroundColor White
-Write-Host "   Deploy Infrastructure: .\deploy\Deploy-LinuxBroker.ps1 -SubscriptionId <sub-id> -ResourceGroupName <rg-name> -Location <location>" -ForegroundColor White
+Write-Host "   Full Workflow:" -ForegroundColor Yellow
+Write-Host "   1. Setup Azure AD:      .\deploy\Setup-AppRegistrations.ps1 -TenantId <your-tenant-id>" -ForegroundColor White
+Write-Host "   2. Deploy Everything:   .\deploy\Deploy-LinuxBroker.ps1 -SubscriptionId <sub-id> -ResourceGroupName <rg-name> -Location <location>" -ForegroundColor White
+Write-Host "   " -ForegroundColor White
+Write-Host "   Manual Workflow:" -ForegroundColor Yellow
+Write-Host "   1. Deploy Infrastructure: .\deploy\Deploy-LinuxBroker.ps1 -SubscriptionId <sub-id> -ResourceGroupName <rg-name> -Location <location> -ConfigurePermissions `$false" -ForegroundColor White
+Write-Host "   2. Setup Azure AD:        .\deploy\Setup-AppRegistrations.ps1 -TenantId <your-tenant-id>" -ForegroundColor White
+Write-Host "   3. Configure Permissions: .\deploy_infrastructure\Assign-AppRoleToFunctionApp.ps1 -SubscriptionId <sub-id> -ResourceGroupName <rg-name>" -ForegroundColor White
 
 if ($errors.Count -gt 0) {
     exit 1

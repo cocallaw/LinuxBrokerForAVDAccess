@@ -27,7 +27,10 @@ param(
     [bool]$DeployLinuxVMs = $false,
     
     [Parameter(Mandatory=$false)]
-    [string]$DeploymentName = "LinuxBroker-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
+    [string]$DeploymentName = "LinuxBroker-$(Get-Date -Format 'yyyyMMdd-HHmmss')",
+    
+    [Parameter(Mandatory=$false)]
+    [bool]$ConfigurePermissions = $true
 )
 
 # Helper function to write timestamped messages
@@ -361,8 +364,39 @@ try {
     }
 
     Write-TimestampedHost "✅ Deployment completed successfully!" -ForegroundColor Green
+    
+    # Optional: Configure Function App permissions if app registration config exists
+    $appConfigPath = "./app-registration-config.json"
+    if ($ConfigurePermissions -and (Test-Path $appConfigPath)) {
+        Write-TimestampedHost ""
+        Write-TimestampedHost "� Configuring Function App permissions..." -ForegroundColor Yellow
+        
+        try {
+            $appConfig = Get-Content $appConfigPath | ConvertFrom-Json
+            if ($appConfig.ApiAppId -and $appConfig.ApiAppId -ne "FAILED_TO_CREATE") {
+                Write-TimestampedHost "Found app registration config, assigning API permissions to Function App..." -ForegroundColor Cyan
+                
+                # Run the app role assignment script
+                & "./deploy_infrastructure/Assign-AppRoleToFunctionApp.ps1" -SubscriptionId $SubscriptionId -ResourceGroupName $ResourceGroupName -FunctionAppName $functionAppName -ApiAppId $appConfig.ApiAppId -ConfigFile $appConfigPath
+                
+                if ($LASTEXITCODE -eq 0) {
+                    Write-TimestampedHost "✅ Function App permissions configured successfully!" -ForegroundColor Green
+                } else {
+                    Write-Warning "Function App permission configuration failed. You can run this manually later."
+                }
+            } else {
+                Write-TimestampedHost "⚠️  API App ID not found in config file. Skipping automatic permission assignment." -ForegroundColor Yellow
+            }
+        } catch {
+            Write-Warning "Could not configure Function App permissions automatically: $($_.Exception.Message)"
+            Write-TimestampedHost "You can run this manually: .\deploy_infrastructure\Assign-AppRoleToFunctionApp.ps1" -ForegroundColor Cyan
+        }
+    } else {
+        Write-TimestampedHost "⚠️  App registration config not found. Function App permissions not configured." -ForegroundColor Yellow
+    }
+    
     Write-TimestampedHost ""
-    Write-TimestampedHost "📋 Deployment Summary:" -ForegroundColor Cyan
+    Write-TimestampedHost "�📋 Deployment Summary:" -ForegroundColor Cyan
     Write-TimestampedHost "API URL: https://$($apiAppName).azurewebsites.net" -ForegroundColor White
     Write-TimestampedHost "Frontend URL: https://$($frontendAppName).azurewebsites.net" -ForegroundColor White
     Write-TimestampedHost "Function App: https://$($functionAppName).azurewebsites.net" -ForegroundColor White
@@ -370,10 +404,17 @@ try {
     Write-TimestampedHost "Database: $databaseName" -ForegroundColor White
     Write-TimestampedHost ""
     Write-TimestampedHost "🔧 Next Steps:" -ForegroundColor Yellow
-    Write-TimestampedHost "1. Configure App Registrations in Azure AD" -ForegroundColor White
-    Write-TimestampedHost "2. Update environment variables with client IDs" -ForegroundColor White
-    Write-TimestampedHost "3. Create security groups and assign managed identities" -ForegroundColor White
-    Write-TimestampedHost "4. Test the deployment" -ForegroundColor White
+    if (Test-Path $appConfigPath) {
+        Write-TimestampedHost "1. Update environment variables with App Registration values from app-registration-config.json" -ForegroundColor White
+        Write-TimestampedHost "2. Create security groups and assign managed identities (if not done automatically)" -ForegroundColor White  
+        Write-TimestampedHost "3. Test the deployment" -ForegroundColor White
+    } else {
+        Write-TimestampedHost "1. Run Setup-AppRegistrations.ps1 to create Azure AD apps" -ForegroundColor White
+        Write-TimestampedHost "2. Update environment variables with client IDs" -ForegroundColor White
+        Write-TimestampedHost "3. Run Assign-AppRoleToFunctionApp.ps1 to configure Function App permissions" -ForegroundColor White
+        Write-TimestampedHost "4. Create security groups and assign managed identities" -ForegroundColor White
+        Write-TimestampedHost "5. Test the deployment" -ForegroundColor White
+    }
 
 } catch {
     Write-Error "Deployment failed: $($_.Exception.Message)"

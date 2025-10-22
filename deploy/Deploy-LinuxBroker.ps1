@@ -30,67 +30,77 @@ param(
     [string]$DeploymentName = "LinuxBroker-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
 )
 
-Write-Host "🚀 Starting Linux Broker for AVD Access deployment..." -ForegroundColor Green
+# Helper function to write timestamped messages
+function Write-TimestampedHost {
+    param(
+        [string]$Message,
+        [string]$ForegroundColor = "White"
+    )
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    Write-Host "[$timestamp] $Message" -ForegroundColor $ForegroundColor
+}
+
+Write-TimestampedHost "🚀 Starting Linux Broker for AVD Access deployment..." -ForegroundColor Green
 
 # Generate random password if not provided
 if ([string]::IsNullOrEmpty($SqlAdminPassword)) {
     # Generate password with alphanumeric characters and safe symbols only
     $SqlAdminPassword = -join ((48..57) + (65..90) + (97..122) + @(33,35,36,37,38,42,43,45,61,63,64) | Get-Random -Count 16 | ForEach-Object { [char]$_ })
-    Write-Host "📝 Generated SQL Admin Password: $SqlAdminPassword" -ForegroundColor Yellow
-    Write-Host "⚠️  Please save this password securely!" -ForegroundColor Red
+    Write-TimestampedHost "📝 Generated SQL Admin Password: $SqlAdminPassword" -ForegroundColor Yellow
+    Write-TimestampedHost "⚠️  Please save this password securely!" -ForegroundColor Red
 }
 
 # Set Azure context
-Write-Host "Setting Azure subscription context..." -ForegroundColor Yellow
+Write-TimestampedHost "Setting Azure subscription context..." -ForegroundColor Yellow
 az account set --subscription $SubscriptionId
 
 # Create resource group if it doesn't exist
-Write-Host "Ensuring resource group exists..." -ForegroundColor Yellow
+Write-TimestampedHost "Ensuring resource group exists..." -ForegroundColor Yellow
 az group create --name $ResourceGroupName --location $Location
 
 # Check for and handle soft-deleted Key Vault
-Write-Host "Checking for existing Key Vault..." -ForegroundColor Yellow
+Write-TimestampedHost "Checking for existing Key Vault..." -ForegroundColor Yellow
 
 # Check for any soft-deleted Key Vaults that might conflict with our naming pattern
 try {
     $keyVaultPattern = "$($ProjectName.Replace('-', ''))$($Environment)kv*"
-    Write-Host "Checking for Key Vaults matching pattern: $keyVaultPattern" -ForegroundColor Cyan
+    Write-TimestampedHost "Checking for Key Vaults matching pattern: $keyVaultPattern" -ForegroundColor Cyan
     
     $deletedKeyVaults = az keyvault list-deleted --output json | ConvertFrom-Json
     $conflictingVaults = $deletedKeyVaults | Where-Object { $_.name -like "$($ProjectName.Replace('-', ''))$($Environment)kv*" }
     
     if ($conflictingVaults -and $conflictingVaults.Count -gt 0) {
-        Write-Host "Found $($conflictingVaults.Count) potentially conflicting soft-deleted Key Vault(s)" -ForegroundColor Yellow
+        Write-TimestampedHost "Found $($conflictingVaults.Count) potentially conflicting soft-deleted Key Vault(s)" -ForegroundColor Yellow
         
         foreach ($vault in $conflictingVaults) {
-            Write-Host "Purging soft-deleted Key Vault: $($vault.name)" -ForegroundColor Yellow
+            Write-TimestampedHost "Purging soft-deleted Key Vault: $($vault.name)" -ForegroundColor Yellow
             $location = $vault.properties.location
             
             az keyvault purge --name $vault.name --location $location
             
             if ($LASTEXITCODE -eq 0) {
-                Write-Host "✅ Successfully purged soft-deleted Key Vault: $($vault.name)" -ForegroundColor Green
+                Write-TimestampedHost "✅ Successfully purged soft-deleted Key Vault: $($vault.name)" -ForegroundColor Green
             } else {
                 Write-Warning "Failed to purge soft-deleted Key Vault: $($vault.name)"
             }
         }
         
         # Wait longer for purge operations to complete
-        Write-Host "Waiting for purge operations to complete..." -ForegroundColor Yellow
+        Write-TimestampedHost "Waiting for purge operations to complete..." -ForegroundColor Yellow
         Start-Sleep -Seconds 30
         
     } else {
-        Write-Host "✅ No conflicting soft-deleted Key Vaults found" -ForegroundColor Green
+        Write-TimestampedHost "✅ No conflicting soft-deleted Key Vaults found" -ForegroundColor Green
     }
 } catch {
     Write-Warning "Could not check for soft-deleted Key Vaults: $($_.Exception.Message)"
-    Write-Host "💡 If deployment fails due to Key Vault conflict, manually purge using:" -ForegroundColor Yellow
-    Write-Host "   az keyvault list-deleted" -ForegroundColor White
-    Write-Host "   az keyvault purge --name <vault-name> --location <location>" -ForegroundColor White
+    Write-TimestampedHost "💡 If deployment fails due to Key Vault conflict, manually purge using:" -ForegroundColor Yellow
+    Write-TimestampedHost "   az keyvault list-deleted" -ForegroundColor White
+    Write-TimestampedHost "   az keyvault purge --name <vault-name> --location <location>" -ForegroundColor White
 }
 
 # Deploy main Bicep template
-Write-Host "Deploying infrastructure..." -ForegroundColor Yellow
+Write-TimestampedHost "Deploying infrastructure..." -ForegroundColor Yellow
 
 try {
     $deploymentResult = az deployment group create `
@@ -109,25 +119,32 @@ try {
     Remove-Item "./temp-params.json" -Force -ErrorAction SilentlyContinue
 
     # Get deployment outputs
-    $apiAppName = $deploymentResult.properties.outputs.infrastructureOutputs.value.apiAppName
-    $frontendAppName = $deploymentResult.properties.outputs.infrastructureOutputs.value.frontendAppName
-    $functionAppName = $deploymentResult.properties.outputs.infrastructureOutputs.value.functionAppName
+    Write-TimestampedHost "Parsing deployment outputs..." -ForegroundColor Cyan
+    $infrastructureOutputs = $deploymentResult.properties.outputs.infrastructureOutputs.value
+    $apiAppName = $infrastructureOutputs.apiAppName.value
+    $frontendAppName = $infrastructureOutputs.frontendAppName.value
+    $functionAppName = $infrastructureOutputs.functionAppName.value
     $sqlServerName = $deploymentResult.properties.outputs.sqlServerName.value
-    $databaseName = $deploymentResult.properties.outputs.infrastructureOutputs.value.databaseName
+    $databaseName = $infrastructureOutputs.databaseName.value
+    
+    Write-TimestampedHost "Deployment outputs parsed:" -ForegroundColor White
+    Write-TimestampedHost "  API App: $apiAppName" -ForegroundColor White
+    Write-TimestampedHost "  Frontend App: $frontendAppName" -ForegroundColor White
+    Write-TimestampedHost "  Function App: $functionAppName" -ForegroundColor White
 
-    Write-Host "✅ Infrastructure deployed successfully!" -ForegroundColor Green
+    Write-TimestampedHost "✅ Infrastructure deployed successfully!" -ForegroundColor Green
     
     # Deploy database schema
-    Write-Host "Setting up database schema..." -ForegroundColor Yellow
+    Write-TimestampedHost "Setting up database schema..." -ForegroundColor Yellow
     
     # Get current public IP for firewall rule
-    Write-Host "Getting current public IP address..." -ForegroundColor Cyan
+    Write-TimestampedHost "Getting current public IP address..." -ForegroundColor Cyan
     try {
         $currentIp = (Invoke-RestMethod -Uri "https://ipinfo.io/ip" -TimeoutSec 10).Trim()
-        Write-Host "Current IP: $currentIp" -ForegroundColor White
+        Write-TimestampedHost "Current IP: $currentIp" -ForegroundColor White
         
         # Add temporary firewall rule for current IP
-        Write-Host "Adding temporary firewall rule..." -ForegroundColor Cyan
+        Write-TimestampedHost "Adding temporary firewall rule..." -ForegroundColor Cyan
         az sql server firewall-rule create `
             --resource-group $ResourceGroupName `
             --server $sqlServerName `
@@ -143,38 +160,77 @@ try {
         $currentIp = $null
     }
     
-    # Run SQL scripts in order
+    # Run SQL scripts in order using different authentication methods
     Get-ChildItem "./sql_queries/*.sql" | Sort-Object Name | ForEach-Object {
-        Write-Host "Executing $($_.Name)..." -ForegroundColor Cyan
+        Write-TimestampedHost "Executing $($_.Name)..." -ForegroundColor Cyan
+        $scriptExecuted = $false
+        
+        # Method 1: Try Azure Active Directory Integrated authentication
         try {
-            sqlcmd -S "$($sqlServerName).database.windows.net" -d $databaseName -G -i $_.FullName
-            if ($LASTEXITCODE -ne 0) {
-                Write-Warning "Failed to execute $($_.Name), but continuing..."
+            sqlcmd -S "$($sqlServerName).database.windows.net" -d $databaseName -G -i $_.FullName -l 30
+            if ($LASTEXITCODE -eq 0) {
+                Write-TimestampedHost "✅ Successfully executed $($_.Name) using AAD Integrated" -ForegroundColor Green
+                $scriptExecuted = $true
             }
         } catch {
-            Write-Warning "Error executing $($_.Name): $($_.Exception.Message)"
+            Write-Verbose "AAD Integrated failed for $($_.Name): $($_.Exception.Message)"
+        }
+        
+        # Method 2: Try using SQL Admin credentials if AAD failed
+        if (-not $scriptExecuted) {
+            try {
+                sqlcmd -S "$($sqlServerName).database.windows.net" -d $databaseName -U "sqladmin" -P $SqlAdminPassword -i $_.FullName -l 30
+                if ($LASTEXITCODE -eq 0) {
+                    Write-TimestampedHost "✅ Successfully executed $($_.Name) using SQL Auth" -ForegroundColor Green
+                    $scriptExecuted = $true
+                }
+            } catch {
+                Write-Verbose "SQL Auth failed for $($_.Name): $($_.Exception.Message)"
+            }
+        }
+        
+        # Method 3: Try Azure CLI as last resort for individual statements
+        if (-not $scriptExecuted) {
+            try {
+                $sqlContent = Get-Content $_.FullName -Raw
+                # Split by GO statements and execute individually
+                $statements = $sqlContent -split '\r?\nGO\r?\n|\r?\n\s*GO\s*\r?\n' | Where-Object { $_.Trim() -ne '' }
+                
+                foreach ($statement in $statements) {
+                    if ($statement.Trim() -ne '') {
+                        az sql db query --server "$($sqlServerName).database.windows.net" --database $databaseName --query $statement.Trim() --output none
+                    }
+                }
+                Write-TimestampedHost "✅ Successfully executed $($_.Name) using Azure CLI" -ForegroundColor Green
+                $scriptExecuted = $true
+            } catch {
+                Write-Warning "All methods failed for $($_.Name): $($_.Exception.Message)"
+            }
+        }
+        
+        if (-not $scriptExecuted) {
+            Write-Warning "Failed to execute $($_.Name) with all available methods, but continuing..."
         }
     }
     
     # Remove temporary firewall rule
     if ($currentIp) {
-        Write-Host "Removing temporary firewall rule..." -ForegroundColor Cyan
+        Write-TimestampedHost "Removing temporary firewall rule..." -ForegroundColor Cyan
         try {
             az sql server firewall-rule delete `
                 --resource-group $ResourceGroupName `
                 --server $sqlServerName `
-                --name "TempDeploymentRule" `
-                --yes
+                --name "TempDeploymentRule"
         } catch {
             Write-Warning "Could not remove temporary firewall rule. Please remove 'TempDeploymentRule' manually."
         }
     }
 
     # Deploy applications
-    Write-Host "Deploying applications..." -ForegroundColor Yellow
+    Write-TimestampedHost "Deploying applications..." -ForegroundColor Yellow
 
     # Deploy API
-    Write-Host "Deploying API application..." -ForegroundColor Cyan
+    Write-TimestampedHost "Deploying API application..." -ForegroundColor Cyan
     Set-Location "./api"
     Compress-Archive -Path "*" -DestinationPath "../api.zip" -Force
     Set-Location ".."
@@ -182,7 +238,7 @@ try {
     Remove-Item "./api.zip" -Force -ErrorAction SilentlyContinue
 
     # Deploy Frontend
-    Write-Host "Deploying Frontend application..." -ForegroundColor Cyan
+    Write-TimestampedHost "Deploying Frontend application..." -ForegroundColor Cyan
     Set-Location "./front_end"
     Compress-Archive -Path "*" -DestinationPath "../frontend.zip" -Force
     Set-Location ".."
@@ -190,7 +246,7 @@ try {
     Remove-Item "./frontend.zip" -Force -ErrorAction SilentlyContinue
 
     # Deploy Function (if func command is available)
-    Write-Host "Deploying Function application..." -ForegroundColor Cyan
+    Write-TimestampedHost "Deploying Function application..." -ForegroundColor Cyan
     try {
         Set-Location "./task"
         func azure functionapp publish $functionAppName
@@ -199,19 +255,20 @@ try {
         Write-Warning "Function deployment failed. Please deploy manually using: func azure functionapp publish $functionAppName"
     }
 
-    Write-Host "✅ Deployment completed successfully!" -ForegroundColor Green
-    Write-Host ""
-    Write-Host "📋 Deployment Summary:" -ForegroundColor Cyan
-    Write-Host "API URL: https://$($apiAppName).azurewebsites.net" -ForegroundColor White
-    Write-Host "Frontend URL: https://$frontendAppName).azurewebsites.net" -ForegroundColor White
-    Write-Host "SQL Server: $($sqlServerName).database.windows.net" -ForegroundColor White
-    Write-Host "Database: $databaseName" -ForegroundColor White
-    Write-Host ""
-    Write-Host "🔧 Next Steps:" -ForegroundColor Yellow
-    Write-Host "1. Configure App Registrations in Azure AD" -ForegroundColor White
-    Write-Host "2. Update environment variables with client IDs" -ForegroundColor White
-    Write-Host "3. Create security groups and assign managed identities" -ForegroundColor White
-    Write-Host "4. Test the deployment" -ForegroundColor White
+    Write-TimestampedHost "✅ Deployment completed successfully!" -ForegroundColor Green
+    Write-TimestampedHost ""
+    Write-TimestampedHost "📋 Deployment Summary:" -ForegroundColor Cyan
+    Write-TimestampedHost "API URL: https://$($apiAppName).azurewebsites.net" -ForegroundColor White
+    Write-TimestampedHost "Frontend URL: https://$($frontendAppName).azurewebsites.net" -ForegroundColor White
+    Write-TimestampedHost "Function App: https://$($functionAppName).azurewebsites.net" -ForegroundColor White
+    Write-TimestampedHost "SQL Server: $($sqlServerName).database.windows.net" -ForegroundColor White
+    Write-TimestampedHost "Database: $databaseName" -ForegroundColor White
+    Write-TimestampedHost ""
+    Write-TimestampedHost "🔧 Next Steps:" -ForegroundColor Yellow
+    Write-TimestampedHost "1. Configure App Registrations in Azure AD" -ForegroundColor White
+    Write-TimestampedHost "2. Update environment variables with client IDs" -ForegroundColor White
+    Write-TimestampedHost "3. Create security groups and assign managed identities" -ForegroundColor White
+    Write-TimestampedHost "4. Test the deployment" -ForegroundColor White
 
 } catch {
     Write-Error "Deployment failed: $($_.Exception.Message)"

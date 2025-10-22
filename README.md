@@ -191,9 +191,52 @@ Given that AVD acts as a pass-through in this solution, starting with **light to
 
 ## Getting Started
 
-*(Instructions on deployment, configuration, and usage will be provided here.)*
+### Quick Deployment (Recommended)
 
-While we work on more detailed instructions, you can deploy the web apps from VS Code or running az web deploy. You can deploy function using VS Code. To support managed identity versus using SAS keys, there are a number of permissions that must be applied, please use the RBAC section to facility implementing them. We will release detailed instructions with video guidance over the coming weeks.
+We've streamlined the deployment process! Use these PowerShell scripts for a complete, automated deployment:
+
+1. **Check Prerequisites**:
+   ```powershell
+   .\deploy\Check-Prerequisites.ps1
+   ```
+
+2. **Setup Azure AD Applications**:
+   ```powershell
+   .\deploy\Setup-AppRegistrations.ps1 -TenantId <your-tenant-id>
+   ```
+
+3. **Deploy Everything** (Infrastructure + Permissions):
+   ```powershell
+   .\deploy\Deploy-LinuxBroker.ps1 -SubscriptionId <subscription-id> -ResourceGroupName <resource-group> -Location <location>
+   ```
+
+### Key Features:
+- ✅ **One-click deployment** with automatic permission configuration
+- ✅ **Enhanced reliability** with multi-method authentication fallback
+- ✅ **Real-time progress tracking** with timestamped logging
+- ✅ **Modern Azure CLI** commands for improved compatibility
+- ✅ **Integrated Microsoft Graph** functionality for app role assignments
+
+### Alternative Deployment Methods:
+
+**Using Bicep Templates Directly**:
+```bash
+az deployment group create --resource-group <rg-name> --template-file bicep/main.bicep --parameters @bicep/main.bicepparam
+```
+
+**Testing Deployment Readiness**:
+```powershell
+.\deploy\Test-DeploymentReadiness.ps1 -SubscriptionId <sub-id> -ResourceGroupName <rg-name>
+```
+
+### What's New:
+
+- **Simplified Process**: No more separate permission configuration scripts
+- **Better Error Handling**: Comprehensive logging and fallback mechanisms  
+- **Enhanced Security**: Automatic managed identity and app role configuration
+- **Improved Visibility**: Timestamped progress messages throughout deployment
+
+For detailed information about the deployment improvements, see [DEPLOYMENT_IMPROVEMENTS.md](DEPLOYMENT_IMPROVEMENTS.md).
 
 ## Contributing
 

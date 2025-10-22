@@ -262,7 +262,12 @@ try {
     Set-Location "./api"
     Compress-Archive -Path "*" -DestinationPath "../api.zip" -Force
     Set-Location ".."
-    az webapp deployment source config-zip --resource-group $ResourceGroupName --name $apiAppName --src "./api.zip"
+    az webapp deploy --resource-group $ResourceGroupName --name $apiAppName --src-path "./api.zip" --type zip
+    if ($LASTEXITCODE -eq 0) {
+        Write-TimestampedHost "✅ API application deployed successfully" -ForegroundColor Green
+    } else {
+        Write-Warning "API application deployment may have failed. Check the Azure portal for details."
+    }
     Remove-Item "./api.zip" -Force -ErrorAction SilentlyContinue
 
     # Deploy Frontend
@@ -270,7 +275,12 @@ try {
     Set-Location "./front_end"
     Compress-Archive -Path "*" -DestinationPath "../frontend.zip" -Force
     Set-Location ".."
-    az webapp deployment source config-zip --resource-group $ResourceGroupName --name $frontendAppName --src "./frontend.zip"
+    az webapp deploy --resource-group $ResourceGroupName --name $frontendAppName --src-path "./frontend.zip" --type zip
+    if ($LASTEXITCODE -eq 0) {
+        Write-TimestampedHost "✅ Frontend application deployed successfully" -ForegroundColor Green
+    } else {
+        Write-Warning "Frontend application deployment may have failed. Check the Azure portal for details."
+    }
     Remove-Item "./frontend.zip" -Force -ErrorAction SilentlyContinue
 
     # Deploy Function (if func command is available)
@@ -333,7 +343,7 @@ try {
             
             # Deploy using Azure CLI
             Write-TimestampedHost "Deploying function app package via Azure CLI..." -ForegroundColor Cyan
-            az functionapp deployment source config-zip --resource-group $ResourceGroupName --name $functionAppName --src $tempZip
+            az functionapp deploy --resource-group $ResourceGroupName --name $functionAppName --src-path $tempZip --type zip
             
             if ($LASTEXITCODE -eq 0) {
                 Write-TimestampedHost "✅ Function app deployed successfully using Azure CLI" -ForegroundColor Green

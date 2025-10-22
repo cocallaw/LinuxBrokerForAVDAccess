@@ -112,20 +112,56 @@ try {
 
 # Check if Microsoft Graph PowerShell module is installed
 Write-TimestampedHost "Checking Microsoft Graph PowerShell module..." -ForegroundColor Yellow
-if (-not (Get-Module -ListAvailable -Name Microsoft.Graph)) {
-    Write-TimestampedHost "Installing Microsoft Graph PowerShell module..." -ForegroundColor Cyan
-    Install-Module Microsoft.Graph -Scope CurrentUser -Force
+$requiredModules = @("Microsoft.Graph.Authentication", "Microsoft.Graph.Applications", "Microsoft.Graph.Identity.DirectoryManagement")
+
+foreach ($module in $requiredModules) {
+    if (-not (Get-Module -ListAvailable -Name $module)) {
+        Write-TimestampedHost "Installing Microsoft Graph module: $module..." -ForegroundColor Cyan
+        try {
+            Install-Module $module -Scope CurrentUser -Force -AllowClobber
+            Write-TimestampedHost "✅ Successfully installed $module" -ForegroundColor Green
+        } catch {
+            Write-TimestampedHost "❌ Failed to install $module, trying main module..." -ForegroundColor Yellow
+            Install-Module Microsoft.Graph -Scope CurrentUser -Force -AllowClobber
+            break
+        }
+    }
 }
 
-Import-Module Microsoft.Graph -Force
+# Import the required modules
+Write-TimestampedHost "Importing Microsoft Graph modules..." -ForegroundColor Yellow
+try {
+    Import-Module Microsoft.Graph.Authentication -Force
+    Import-Module Microsoft.Graph.Applications -Force  
+    Import-Module Microsoft.Graph.Identity.DirectoryManagement -Force
+    Write-TimestampedHost "✅ Successfully imported Microsoft Graph modules" -ForegroundColor Green
+} catch {
+    Write-TimestampedHost "⚠️  Some modules failed to import, trying main module..." -ForegroundColor Yellow
+    Import-Module Microsoft.Graph -Force
+}
 
 # Connect to Microsoft Graph
 Write-TimestampedHost "Connecting to Microsoft Graph..." -ForegroundColor Yellow
 try {
-    Connect-MgGraph -Scopes "Application.ReadWrite.All", "AppRoleAssignment.ReadWrite.All" -NoWelcome
-    Write-TimestampedHost "✅ Successfully connected to Microsoft Graph" -ForegroundColor Green
+    # Try with NoWelcome parameter first (newer versions)
+    try {
+        Connect-MgGraph -Scopes "Application.ReadWrite.All", "AppRoleAssignment.ReadWrite.All" -NoWelcome
+    } catch {
+        # Fall back to without NoWelcome parameter (older versions)
+        Connect-MgGraph -Scopes "Application.ReadWrite.All", "AppRoleAssignment.ReadWrite.All"
+    }
+    
+    # Verify connection
+    $context = Get-MgContext
+    if ($context) {
+        Write-TimestampedHost "✅ Successfully connected to Microsoft Graph" -ForegroundColor Green
+        Write-TimestampedHost "Connected as: $($context.Account)" -ForegroundColor Cyan
+    } else {
+        throw "Connection verification failed"
+    }
 } catch {
     Write-Error "Failed to connect to Microsoft Graph: $($_.Exception.Message)"
+    Write-TimestampedHost "💡 Try running: Connect-MgGraph -Scopes 'Application.ReadWrite.All', 'AppRoleAssignment.ReadWrite.All'" -ForegroundColor Yellow
     exit 1
 }
 
@@ -207,4 +243,10 @@ Get-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $functionAppSp.Id | 
 
 Write-TimestampedHost "✅ App role assignment completed successfully!" -ForegroundColor Green
 
-Disconnect-MgGraph
+# Disconnect from Microsoft Graph
+try {
+    Disconnect-MgGraph | Out-Null
+    Write-TimestampedHost "Disconnected from Microsoft Graph" -ForegroundColor Cyan
+} catch {
+    # Ignore disconnect errors
+}

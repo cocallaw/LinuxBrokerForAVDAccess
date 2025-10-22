@@ -264,17 +264,24 @@ if ($errors.Count -gt 0) {
 }
 
 Write-Host "`n💡 QUICK START COMMANDS:" -ForegroundColor Magenta
-Write-Host "   Full Workflow:" -ForegroundColor Yellow
+Write-Host "   Recommended Workflow:" -ForegroundColor Yellow
 Write-Host "   1. Setup Azure AD:      .\deploy\Setup-AppRegistrations.ps1 -TenantId <your-tenant-id>" -ForegroundColor White
 Write-Host "   2. Deploy Everything:   .\deploy\Deploy-LinuxBroker.ps1 -SubscriptionId <sub-id> -ResourceGroupName <rg-name> -Location <location>" -ForegroundColor White
 Write-Host "   " -ForegroundColor White
-Write-Host "   Manual Workflow:" -ForegroundColor Yellow
-Write-Host "   1. Deploy Infrastructure: .\deploy\Deploy-LinuxBroker.ps1 -SubscriptionId <sub-id> -ResourceGroupName <rg-name> -Location <location> -ConfigurePermissions `$false" -ForegroundColor White
+Write-Host "   Alternative Workflow:" -ForegroundColor Yellow
+Write-Host "   1. Deploy Infrastructure: .\deploy\Deploy-LinuxBroker.ps1 -SubscriptionId <sub-id> -ResourceGroupName <rg-name> -Location <location>" -ForegroundColor White
 Write-Host "   2. Setup Azure AD:        .\deploy\Setup-AppRegistrations.ps1 -TenantId <your-tenant-id>" -ForegroundColor White
-Write-Host "   3. Configure Permissions: .\deploy_infrastructure\Assign-AppRoleToFunctionApp.ps1 -SubscriptionId <sub-id> -ResourceGroupName <rg-name>" -ForegroundColor White
+Write-Host "   3. Re-run Deployment:     .\deploy\Deploy-LinuxBroker.ps1 -SubscriptionId <sub-id> -ResourceGroupName <rg-name> -Location <location>" -ForegroundColor White
+Write-Host "   " -ForegroundColor White
+Write-Host "   Manual Permission Setup: .\deploy_infrastructure\Assign-AppRoleToFunctionApp.ps1 -SubscriptionId <sub-id> -ResourceGroupName <rg-name>" -ForegroundColor Cyan
+
+Write-Host "`n📝 NOTE: Deploy-LinuxBroker.ps1 now automatically configures all necessary permissions!" -ForegroundColor Green
+Write-Host "   The ConfigurePermissions parameter has been removed - permissions are always applied." -ForegroundColor Green
 
 if ($errors.Count -gt 0) {
+    Write-Host "`n❌ Prerequisites check failed! Please fix the issues above before deployment." -ForegroundColor Red
     exit 1
 } else {
+    Write-Host "`n✅ Prerequisites check completed! You're ready to deploy!" -ForegroundColor Green
     exit 0
 }

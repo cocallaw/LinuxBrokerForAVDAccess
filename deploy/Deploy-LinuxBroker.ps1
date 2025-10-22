@@ -27,10 +27,7 @@ param(
     [bool]$DeployLinuxVMs = $false,
     
     [Parameter(Mandatory=$false)]
-    [string]$DeploymentName = "LinuxBroker-$(Get-Date -Format 'yyyyMMdd-HHmmss')",
-    
-    [Parameter(Mandatory=$false)]
-    [bool]$ConfigurePermissions = $true
+    [string]$DeploymentName = "LinuxBroker-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
 )
 
 # Helper function to write timestamped messages
@@ -41,6 +38,148 @@ function Write-TimestampedHost {
     )
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     Write-Host "[$timestamp] $Message" -ForegroundColor $ForegroundColor
+}
+
+# Helper function to configure Microsoft Graph and assign app roles
+function Set-FunctionAppPermissions {
+    param(
+        [string]$FunctionAppName,
+        [string]$ResourceGroupName,
+        [string]$ApiAppId,
+        [string]$AppRoleValue = "ScheduledTask"
+    )
+    
+    Write-TimestampedHost "🔐 Configuring Function App permissions..." -ForegroundColor Yellow
+    
+    # Get Function App's managed identity principal ID
+    Write-TimestampedHost "Getting Function App managed identity..." -ForegroundColor Cyan
+    try {
+        $functionAppIdentity = az functionapp identity show --name $FunctionAppName --resource-group $ResourceGroupName --output json | ConvertFrom-Json
+        if ($functionAppIdentity -and $functionAppIdentity.principalId) {
+            $functionAppSpId = $functionAppIdentity.principalId
+            Write-TimestampedHost "Function App Managed Identity Principal ID: $functionAppSpId" -ForegroundColor White
+        } else {
+            Write-Warning "Function App '$FunctionAppName' does not have a managed identity enabled"
+            return $false
+        }
+    } catch {
+        Write-Warning "Failed to get Function App managed identity: $($_.Exception.Message)"
+        return $false
+    }
+
+    # Check if Microsoft Graph PowerShell module is installed and install if needed
+    Write-TimestampedHost "Checking Microsoft Graph PowerShell module..." -ForegroundColor Cyan
+    $requiredModules = @("Microsoft.Graph.Authentication", "Microsoft.Graph.Applications", "Microsoft.Graph.Identity.DirectoryManagement")
+
+    foreach ($module in $requiredModules) {
+        if (-not (Get-Module -ListAvailable -Name $module)) {
+            Write-TimestampedHost "Installing Microsoft Graph module: $module..." -ForegroundColor Yellow
+            try {
+                Install-Module $module -Scope CurrentUser -Force -AllowClobber | Out-Null
+                Write-TimestampedHost "✅ Successfully installed $module" -ForegroundColor Green
+            } catch {
+                Write-TimestampedHost "❌ Failed to install $module, trying main module..." -ForegroundColor Yellow
+                Install-Module Microsoft.Graph -Scope CurrentUser -Force -AllowClobber | Out-Null
+                break
+            }
+        }
+    }
+
+    # Import the required modules
+    Write-TimestampedHost "Importing Microsoft Graph modules..." -ForegroundColor Cyan
+    try {
+        Import-Module Microsoft.Graph.Authentication -Force
+        Import-Module Microsoft.Graph.Applications -Force  
+        Import-Module Microsoft.Graph.Identity.DirectoryManagement -Force
+    } catch {
+        Write-TimestampedHost "⚠️  Some modules failed to import, trying main module..." -ForegroundColor Yellow
+        Import-Module Microsoft.Graph -Force
+    }
+
+    # Connect to Microsoft Graph
+    Write-TimestampedHost "Connecting to Microsoft Graph..." -ForegroundColor Cyan
+    try {
+        # Try with NoWelcome parameter first (newer versions)
+        try {
+            Connect-MgGraph -Scopes "Application.ReadWrite.All", "AppRoleAssignment.ReadWrite.All" -NoWelcome | Out-Null
+        } catch {
+            # Fall back to without NoWelcome parameter (older versions)
+            Connect-MgGraph -Scopes "Application.ReadWrite.All", "AppRoleAssignment.ReadWrite.All" | Out-Null
+        }
+        
+        # Verify connection
+        $context = Get-MgContext
+        if ($context) {
+            Write-TimestampedHost "✅ Successfully connected to Microsoft Graph as: $($context.Account)" -ForegroundColor Green
+        } else {
+            throw "Connection verification failed"
+        }
+    } catch {
+        Write-Warning "Failed to connect to Microsoft Graph: $($_.Exception.Message)"
+        Write-TimestampedHost "💡 You can configure permissions manually later using: .\deploy_infrastructure\Assign-AppRoleToFunctionApp.ps1" -ForegroundColor Cyan
+        return $false
+    }
+
+    try {
+        # Get the Function App service principal
+        Write-TimestampedHost "Looking up Function App service principal..." -ForegroundColor Cyan
+        $functionAppSp = Get-MgServicePrincipal -Filter "Id eq '$functionAppSpId'"
+        if (-not $functionAppSp) {
+            Write-Warning "Could not find service principal for Function App managed identity"
+            return $false
+        }
+
+        # Get the API service principal
+        Write-TimestampedHost "Looking up API service principal..." -ForegroundColor Cyan
+        $apiSp = Get-MgServicePrincipal -Filter "AppId eq '$ApiAppId'"
+        if (-not $apiSp) {
+            Write-Warning "Could not find service principal for API App ID: $ApiAppId"
+            return $false
+        }
+
+        # Find the required app role
+        Write-TimestampedHost "Looking for '$AppRoleValue' app role..." -ForegroundColor Cyan
+        $appRole = $apiSp.AppRoles | Where-Object { $_.Value -eq $AppRoleValue -and $_.AllowedMemberTypes -contains "Application" }
+
+        if ($null -eq $appRole) {
+            Write-Warning "App role '$AppRoleValue' not found in API application '$($apiSp.DisplayName)'"
+            Write-Host "Available app roles:" -ForegroundColor Yellow
+            $apiSp.AppRoles | Where-Object { $_.AllowedMemberTypes -contains "Application" } | ForEach-Object {
+                Write-Host "  - $($_.Value): $($_.DisplayName)" -ForegroundColor White
+            }
+            return $false
+        }
+
+        Write-TimestampedHost "✅ Found app role: $($appRole.DisplayName)" -ForegroundColor Green
+
+        # Check if assignment already exists
+        Write-TimestampedHost "Checking for existing app role assignments..." -ForegroundColor Cyan
+        $existingAssignments = Get-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $functionAppSp.Id
+        $existingAssignment = $existingAssignments | Where-Object { $_.ResourceId -eq $apiSp.Id -and $_.AppRoleId -eq $appRole.Id }
+
+        if ($existingAssignment) {
+            Write-TimestampedHost "✅ App role assignment already exists!" -ForegroundColor Green
+        } else {
+            # Create the app role assignment
+            Write-TimestampedHost "Creating app role assignment..." -ForegroundColor Cyan
+            $assignment = New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $functionAppSp.Id -PrincipalId $functionAppSp.Id -ResourceId $apiSp.Id -AppRoleId $appRole.Id
+            Write-TimestampedHost "✅ Successfully created app role assignment: $($assignment.Id)" -ForegroundColor Green
+        }
+
+        Write-TimestampedHost "✅ Function App permissions configured successfully!" -ForegroundColor Green
+        return $true
+
+    } catch {
+        Write-Warning "Failed to configure app role assignment: $($_.Exception.Message)"
+        return $false
+    } finally {
+        # Disconnect from Microsoft Graph
+        try {
+            Disconnect-MgGraph | Out-Null
+        } catch {
+            # Ignore disconnect errors
+        }
+    }
 }
 
 Write-TimestampedHost "🚀 Starting Linux Broker for AVD Access deployment..." -ForegroundColor Green
@@ -365,34 +504,32 @@ try {
 
     Write-TimestampedHost "✅ Deployment completed successfully!" -ForegroundColor Green
     
-    # Optional: Configure Function App permissions if app registration config exists
+    # Configure Function App permissions if app registration config exists
+    Write-TimestampedHost ""
     $appConfigPath = "./app-registration-config.json"
-    if ($ConfigurePermissions -and (Test-Path $appConfigPath)) {
-        Write-TimestampedHost ""
-        Write-TimestampedHost "� Configuring Function App permissions..." -ForegroundColor Yellow
-        
+    if (Test-Path $appConfigPath) {
         try {
             $appConfig = Get-Content $appConfigPath | ConvertFrom-Json
             if ($appConfig.ApiAppId -and $appConfig.ApiAppId -ne "FAILED_TO_CREATE") {
-                Write-TimestampedHost "Found app registration config, assigning API permissions to Function App..." -ForegroundColor Cyan
+                Write-TimestampedHost "Found app registration config, configuring Function App permissions..." -ForegroundColor Cyan
                 
-                # Run the app role assignment script
-                & "./deploy_infrastructure/Assign-AppRoleToFunctionApp.ps1" -SubscriptionId $SubscriptionId -ResourceGroupName $ResourceGroupName -FunctionAppName $functionAppName -ApiAppId $appConfig.ApiAppId -ConfigFile $appConfigPath
+                $permissionResult = Set-FunctionAppPermissions -FunctionAppName $functionAppName -ResourceGroupName $ResourceGroupName -ApiAppId $appConfig.ApiAppId
                 
-                if ($LASTEXITCODE -eq 0) {
-                    Write-TimestampedHost "✅ Function App permissions configured successfully!" -ForegroundColor Green
-                } else {
-                    Write-Warning "Function App permission configuration failed. You can run this manually later."
+                if (-not $permissionResult) {
+                    Write-TimestampedHost "⚠️  Function App permission configuration failed, but deployment continues" -ForegroundColor Yellow
+                    Write-TimestampedHost "You can configure permissions manually later using: .\deploy_infrastructure\Assign-AppRoleToFunctionApp.ps1" -ForegroundColor Cyan
                 }
             } else {
-                Write-TimestampedHost "⚠️  API App ID not found in config file. Skipping automatic permission assignment." -ForegroundColor Yellow
+                Write-TimestampedHost "⚠️  API App ID not found in config file. Skipping permission assignment." -ForegroundColor Yellow
+                Write-TimestampedHost "Create App Registrations first using: .\deploy\Setup-AppRegistrations.ps1" -ForegroundColor Cyan
             }
         } catch {
-            Write-Warning "Could not configure Function App permissions automatically: $($_.Exception.Message)"
-            Write-TimestampedHost "You can run this manually: .\deploy_infrastructure\Assign-AppRoleToFunctionApp.ps1" -ForegroundColor Cyan
+            Write-Warning "Could not read app registration config: $($_.Exception.Message)"
+            Write-TimestampedHost "You can configure permissions manually later using: .\deploy_infrastructure\Assign-AppRoleToFunctionApp.ps1" -ForegroundColor Cyan
         }
     } else {
         Write-TimestampedHost "⚠️  App registration config not found. Function App permissions not configured." -ForegroundColor Yellow
+        Write-TimestampedHost "Run Setup-AppRegistrations.ps1 first to create Azure AD apps and generate config" -ForegroundColor Cyan
     }
     
     Write-TimestampedHost ""
@@ -410,8 +547,8 @@ try {
         Write-TimestampedHost "3. Test the deployment" -ForegroundColor White
     } else {
         Write-TimestampedHost "1. Run Setup-AppRegistrations.ps1 to create Azure AD apps" -ForegroundColor White
-        Write-TimestampedHost "2. Update environment variables with client IDs" -ForegroundColor White
-        Write-TimestampedHost "3. Run Assign-AppRoleToFunctionApp.ps1 to configure Function App permissions" -ForegroundColor White
+        Write-TimestampedHost "2. Re-run this deployment script to automatically configure Function App permissions" -ForegroundColor White
+        Write-TimestampedHost "3. Update environment variables with client IDs" -ForegroundColor White
         Write-TimestampedHost "4. Create security groups and assign managed identities" -ForegroundColor White
         Write-TimestampedHost "5. Test the deployment" -ForegroundColor White
     }

@@ -165,46 +165,74 @@ try {
         Write-TimestampedHost "Executing $($_.Name)..." -ForegroundColor Cyan
         $scriptExecuted = $false
         
-        # Method 1: Try Azure Active Directory Integrated authentication
+        # Method 1: Try using SQL Admin credentials first (most reliable)
         try {
-            sqlcmd -S "$($sqlServerName).database.windows.net" -d $databaseName -G -i $_.FullName -l 30
+            $result = sqlcmd -S "$($sqlServerName).database.windows.net" -d $databaseName -U "sqladmin" -P $SqlAdminPassword -i $_.FullName -l 30 -b 2>&1
             if ($LASTEXITCODE -eq 0) {
-                Write-TimestampedHost "✅ Successfully executed $($_.Name) using AAD Integrated" -ForegroundColor Green
+                Write-TimestampedHost "✅ Successfully executed $($_.Name) using SQL Auth" -ForegroundColor Green
                 $scriptExecuted = $true
-            }
-        } catch {
-            Write-Verbose "AAD Integrated failed for $($_.Name): $($_.Exception.Message)"
-        }
-        
-        # Method 2: Try using SQL Admin credentials if AAD failed
-        if (-not $scriptExecuted) {
-            try {
-                sqlcmd -S "$($sqlServerName).database.windows.net" -d $databaseName -U "sqladmin" -P $SqlAdminPassword -i $_.FullName -l 30
-                if ($LASTEXITCODE -eq 0) {
-                    Write-TimestampedHost "✅ Successfully executed $($_.Name) using SQL Auth" -ForegroundColor Green
+            } else {
+                # Check if there are any actual errors (not just warnings)
+                $errors = $result | Where-Object { $_ -match "Msg \d+, Level (1[6-9]|2[0-5])" }
+                if (-not $errors) {
+                    Write-TimestampedHost "✅ Successfully executed $($_.Name) using SQL Auth (with warnings)" -ForegroundColor Green
                     $scriptExecuted = $true
                 }
+            }
+        } catch {
+            Write-Verbose "SQL Auth failed for $($_.Name): $($_.Exception.Message)"
+        }
+        
+        # Method 2: Try Azure Active Directory Integrated authentication if SQL Auth failed
+        if (-not $scriptExecuted) {
+            try {
+                $result = sqlcmd -S "$($sqlServerName).database.windows.net" -d $databaseName -G -i $_.FullName -l 30 -b 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    Write-TimestampedHost "✅ Successfully executed $($_.Name) using AAD Integrated" -ForegroundColor Green
+                    $scriptExecuted = $true
+                } else {
+                    # Check if there are any actual errors (not just warnings)
+                    $errors = $result | Where-Object { $_ -match "Msg \d+, Level (1[6-9]|2[0-5])" }
+                    if (-not $errors) {
+                        Write-TimestampedHost "✅ Successfully executed $($_.Name) using AAD Integrated (with warnings)" -ForegroundColor Green
+                        $scriptExecuted = $true
+                    }
+                }
             } catch {
-                Write-Verbose "SQL Auth failed for $($_.Name): $($_.Exception.Message)"
+                Write-Verbose "AAD Integrated failed for $($_.Name): $($_.Exception.Message)"
             }
         }
         
         # Method 3: Try Azure CLI as last resort for individual statements
         if (-not $scriptExecuted) {
             try {
-                $sqlContent = Get-Content $_.FullName -Raw
+                # Read file with proper encoding handling
+                $sqlContent = Get-Content $_.FullName -Raw -Encoding UTF8
+                # Remove BOM if present
+                if ($sqlContent.StartsWith([char]0xFEFF)) {
+                    $sqlContent = $sqlContent.Substring(1)
+                }
+                
                 # Split by GO statements and execute individually
                 $statements = $sqlContent -split '\r?\nGO\r?\n|\r?\n\s*GO\s*\r?\n' | Where-Object { $_.Trim() -ne '' }
                 
+                $allSucceeded = $true
                 foreach ($statement in $statements) {
                     if ($statement.Trim() -ne '') {
-                        az sql db query --server "$($sqlServerName).database.windows.net" --database $databaseName --query $statement.Trim() --output none
+                        $result = az sql db query --server "$($sqlServerName).database.windows.net" --database $databaseName --query $statement.Trim() --output none 2>&1
+                        if ($LASTEXITCODE -ne 0) {
+                            $allSucceeded = $false
+                            break
+                        }
                     }
                 }
-                Write-TimestampedHost "✅ Successfully executed $($_.Name) using Azure CLI" -ForegroundColor Green
-                $scriptExecuted = $true
+                
+                if ($allSucceeded) {
+                    Write-TimestampedHost "✅ Successfully executed $($_.Name) using Azure CLI" -ForegroundColor Green
+                    $scriptExecuted = $true
+                }
             } catch {
-                Write-Warning "All methods failed for $($_.Name): $($_.Exception.Message)"
+                Write-Verbose "Azure CLI failed for $($_.Name): $($_.Exception.Message)"
             }
         }
         

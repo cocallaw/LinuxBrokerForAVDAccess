@@ -1,0 +1,37 @@
+{
+  "avd": {
+    "deploy": true,
+    "resourceGroup": "rg-linuxbroker-avd",
+    "hostPoolName": "hp-linuxbroker-avd",
+    "sessionHostCount": 2,
+    "vmSize": "Standard_D8s_v4",
+    "adminUsername": "avdadmin",
+    "adminPassword": "Spiderman1!"
+  },
+  "linuxVMs": {
+    "deploy": false,
+    "resourceGroup": "linux-rg",
+    "vmCount": 0,
+    "vmSize": "Standard_D2s_v3",
+    "osVersion": "24_04-lts",
+    "adminUsername": "linuxadmin",
+    "adminPassword": "NotUsed"
+  },
+  "network": {
+    "avd": {
+      "vnetName": "vnet-broker-lab01",
+      "subnetName": "sn00",
+      "vnetResourceGroup": "rg-linuxbroker-vnet"
+    },
+    "linuxVMs": {
+      "vnetName": "avd-vnet",
+      "subnetName": "linux-subnet",
+      "vnetResourceGroup": "avd-network-rg"
+    }
+  },
+  "tags": {
+    "Environment": "Development",
+    "Project": "LinuxBrokerForAVD-AVDOnly",
+    "Owner": "AVD Team"
+  }
+}

@@ -363,18 +363,36 @@ try {
     if ($deployLinuxVMs -and $vmConfig) {
         $linuxConfig = $vmConfig.linuxVMs
         $linuxNetwork = $vmConfig.network.linuxVMs
+        
+        # Validate authentication configuration
+        $authType = if ($linuxConfig.authType) { $linuxConfig.authType } else { "Password" }
+        $adminPassword = if ($linuxConfig.adminPassword) { $linuxConfig.adminPassword } else { "" }
+        $sshPublicKey = if ($linuxConfig.sshPublicKey) { $linuxConfig.sshPublicKey } else { "" }
+        
+        # Validation for authentication requirements
+        if ($authType -eq "Password" -and [string]::IsNullOrEmpty($adminPassword)) {
+            Write-Error "Password authentication selected but adminPassword is empty"
+            exit 1
+        }
+        if ($authType -eq "SSH" -and [string]::IsNullOrEmpty($sshPublicKey)) {
+            Write-Error "SSH authentication selected but sshPublicKey is empty"
+            exit 1
+        }
+        
         $bicepParameters += @(
             "linuxResourceGroup=$($linuxConfig.resourceGroup)"
             "linuxVmCount=$($linuxConfig.vmCount)"
             "linuxVmSize=$($linuxConfig.vmSize)"
             "linuxOSVersion=$($linuxConfig.osVersion)"
+            "linuxAuthType=$authType"
             "linuxAdminUsername=$($linuxConfig.adminUsername)"
-            "linuxAdminPassword=$($linuxConfig.adminPassword)"
+            "linuxAdminPassword=$adminPassword"
+            "linuxSshPublicKey=$sshPublicKey"
             "vnetName=$($linuxNetwork.vnetName)"
             "subnetName=$($linuxNetwork.subnetName)"
             "vnetResourceGroup=$($linuxNetwork.vnetResourceGroup)"
         )
-        Write-TimestampedHost "Added Linux VM deployment parameters (RG: $($linuxConfig.resourceGroup), Network: $($linuxNetwork.vnetName)/$($linuxNetwork.subnetName))" -ForegroundColor Cyan
+        Write-TimestampedHost "Added Linux VM deployment parameters (RG: $($linuxConfig.resourceGroup), Auth: $authType, Network: $($linuxNetwork.vnetName)/$($linuxNetwork.subnetName))" -ForegroundColor Cyan
     }
     
     # Create parameters file for robust deployment
@@ -748,9 +766,61 @@ try {
 
     Write-TimestampedHost "✅ Deployment completed successfully!" -ForegroundColor Green
     
+    # Add VMs to security groups if they were deployed
+    $appConfigPath = "./app-registration-config.json"
+    if ((Test-Path $appConfigPath) -and ($deployAVD -or $deployLinuxVMs)) {
+        Write-TimestampedHost ""
+        Write-TimestampedHost "👥 Adding VMs to security groups..." -ForegroundColor Yellow
+        
+        try {
+            $appConfig = Get-Content $appConfigPath | ConvertFrom-Json
+            
+            # Add AVD VMs to AVD security group
+            if ($deployAVD -and $appConfig.AVDHostGroupId -and $vmConfig.avd.resourceGroup) {
+                Write-TimestampedHost "Adding AVD VMs to security group..." -ForegroundColor Cyan
+                $avdVMs = az vm list --resource-group $vmConfig.avd.resourceGroup --query "[?contains(name, 'linuxbroker')].{name:name, principalId:identity.principalId}" -o json | ConvertFrom-Json
+                
+                foreach ($vm in $avdVMs) {
+                    if ($vm.principalId) {
+                        Write-TimestampedHost "  Adding $($vm.name) to AVD security group..." -ForegroundColor White
+                        az ad group member add --group $appConfig.AVDHostGroupId --member-id $vm.principalId --output none
+                        if ($LASTEXITCODE -eq 0) {
+                            Write-TimestampedHost "    ✅ Successfully added $($vm.name)" -ForegroundColor Green
+                        } else {
+                            Write-Warning "Failed to add $($vm.name) to AVD security group"
+                        }
+                    }
+                }
+            }
+            
+            # Add Linux VMs to Linux security group
+            if ($deployLinuxVMs -and $appConfig.LinuxHostGroupId -and $vmConfig.linuxVMs.resourceGroup) {
+                Write-TimestampedHost "Adding Linux VMs to security group..." -ForegroundColor Cyan
+                $linuxVMs = az vm list --resource-group $vmConfig.linuxVMs.resourceGroup --query "[?contains(name, 'linuxbroker')].{name:name, principalId:identity.principalId}" -o json | ConvertFrom-Json
+                
+                foreach ($vm in $linuxVMs) {
+                    if ($vm.principalId) {
+                        Write-TimestampedHost "  Adding $($vm.name) to Linux security group..." -ForegroundColor White
+                        az ad group member add --group $appConfig.LinuxHostGroupId --member-id $vm.principalId --output none
+                        if ($LASTEXITCODE -eq 0) {
+                            Write-TimestampedHost "    ✅ Successfully added $($vm.name)" -ForegroundColor Green
+                        } else {
+                            Write-Warning "Failed to add $($vm.name) to Linux security group"
+                        }
+                    }
+                }
+            }
+            
+            Write-TimestampedHost "✅ VM security group assignment completed!" -ForegroundColor Green
+            
+        } catch {
+            Write-Warning "Failed to add VMs to security groups: $($_.Exception.Message)"
+            Write-TimestampedHost "💡 You can add VMs to security groups manually via Azure Portal or CLI" -ForegroundColor Cyan
+        }
+    }
+    
     # Configure Function App permissions if app registration config exists
     Write-TimestampedHost ""
-    $appConfigPath = "./app-registration-config.json"
     if (Test-Path $appConfigPath) {
         try {
             $appConfig = Get-Content $appConfigPath | ConvertFrom-Json

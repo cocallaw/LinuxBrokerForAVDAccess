@@ -25,9 +25,15 @@ param linuxResourceGroup string = ''
 param linuxVmCount int = 2
 param linuxVmSize string = 'Standard_D2s_v3'
 param linuxOSVersion string = '24_04-lts'
+@allowed([
+  'Password'
+  'SSH'
+])
+param linuxAuthType string = 'Password'
 param linuxAdminUsername string = 'linuxadmin'
 @secure()
 param linuxAdminPassword string = ''
+param linuxSshPublicKey string = ''
 
 // Network Configuration (required if deploying VMs)
 param vnetName string = ''
@@ -79,9 +85,10 @@ module linuxVmDeployment 'Linux/main.bicep' = if (deployLinuxVMs) {
     vmSize: linuxVmSize
     numberOfVMs: linuxVmCount
     OSVersion: linuxOSVersion
-    authType: 'Password'
+    authType: linuxAuthType
     adminUsername: linuxAdminUsername
     adminPassword: linuxAdminPassword
+    sshPublicKey: linuxSshPublicKey
     vnetName: vnetName
     subnetName: subnetName
     vnetResourceGroup: vnetResourceGroup

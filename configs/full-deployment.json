@@ -14,8 +14,10 @@
     "vmCount": 5,
     "vmSize": "Standard_D4s_v3",
     "osVersion": "9-LVM",
+    "authType": "Password",
     "adminUsername": "linuxadmin",
-    "adminPassword": "YourSecureLinuxPassword123!"
+    "adminPassword": "YourSecureLinuxPassword123!",
+    "sshPublicKey": ""
   },
   "network": {
     "avd": {

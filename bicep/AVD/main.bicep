@@ -36,10 +36,8 @@ param agentUpdate object = {
 param vmNamePrefix string
 @description('The size of the session host VMs')
 @allowed([
-  'Standard_DS2_v2'
   'Standard_D8s_v5'
   'Standard_D8s_v4'
-  'Standard_F8s_v2'
   'Standard_D8as_v4'
   'Standard_D16s_v5'
   'Standard_D16s_v4'

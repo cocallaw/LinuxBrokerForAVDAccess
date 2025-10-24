@@ -1,0 +1,1463 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.38.33.27573",
+      "templateHash": "8189837177074166607"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    },
+    "projectName": {
+      "type": "string",
+      "defaultValue": "linuxbroker"
+    },
+    "environment": {
+      "type": "string",
+      "defaultValue": "dev"
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {}
+    },
+    "sqlAdminUsername": {
+      "type": "string",
+      "defaultValue": "sqladmin"
+    },
+    "sqlAdminPassword": {
+      "type": "securestring"
+    },
+    "deployAVD": {
+      "type": "bool",
+      "defaultValue": false
+    },
+    "avdResourceGroup": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "avdHostPoolName": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "avdSessionHostCount": {
+      "type": "int",
+      "defaultValue": 2
+    },
+    "avdVmSize": {
+      "type": "string",
+      "defaultValue": "Standard_DS2_v2"
+    },
+    "avdAdminUsername": {
+      "type": "string",
+      "defaultValue": "avdadmin"
+    },
+    "avdAdminPassword": {
+      "type": "securestring",
+      "defaultValue": ""
+    },
+    "deployLinuxVMs": {
+      "type": "bool",
+      "defaultValue": false
+    },
+    "linuxResourceGroup": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "linuxVmCount": {
+      "type": "int",
+      "defaultValue": 2
+    },
+    "linuxVmSize": {
+      "type": "string",
+      "defaultValue": "Standard_D2s_v3"
+    },
+    "linuxOSVersion": {
+      "type": "string",
+      "defaultValue": "24_04-lts"
+    },
+    "linuxAdminUsername": {
+      "type": "string",
+      "defaultValue": "linuxadmin"
+    },
+    "linuxAdminPassword": {
+      "type": "securestring",
+      "defaultValue": ""
+    },
+    "vnetName": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "subnetName": {
+      "type": "string",
+      "defaultValue": ""
+    },
+    "vnetResourceGroup": {
+      "type": "string",
+      "defaultValue": ""
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "infrastructure-deployment",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "projectName": {
+            "value": "[parameters('projectName')]"
+          },
+          "environment": {
+            "value": "[parameters('environment')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
+          },
+          "sqlAdminUsername": {
+            "value": "[parameters('sqlAdminUsername')]"
+          },
+          "sqlAdminPassword": {
+            "value": "[parameters('sqlAdminPassword')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.38.33.27573",
+              "templateHash": "16347842408491033845"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]"
+            },
+            "projectName": {
+              "type": "string",
+              "defaultValue": "linuxbroker"
+            },
+            "environment": {
+              "type": "string",
+              "defaultValue": "dev"
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {}
+            },
+            "sqlAdminUsername": {
+              "type": "string",
+              "defaultValue": "sqladmin"
+            },
+            "sqlAdminPassword": {
+              "type": "securestring"
+            },
+            "databaseName": {
+              "type": "string",
+              "defaultValue": "LinuxBrokerDB"
+            },
+            "appServicePlanSku": {
+              "type": "string",
+              "defaultValue": "P1v3"
+            },
+            "keyVaultAccessPrincipalId": {
+              "type": "string",
+              "defaultValue": ""
+            }
+          },
+          "variables": {
+            "resourcePrefix": "[format('{0}-{1}', parameters('projectName'), parameters('environment'))]",
+            "uniqueSuffix": "[substring(uniqueString(resourceGroup().id), 0, 6)]",
+            "keyVaultName": "[format('{0}{1}kv{2}', replace(parameters('projectName'), '-', ''), parameters('environment'), variables('uniqueSuffix'))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.Sql/servers/databases",
+              "apiVersion": "2023-08-01-preview",
+              "name": "[format('{0}/{1}', format('{0}-sql-{1}', variables('resourcePrefix'), variables('uniqueSuffix')), parameters('databaseName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "S1",
+                "tier": "Standard"
+              },
+              "properties": {
+                "collation": "SQL_Latin1_General_CP1_CI_AS",
+                "maxSizeBytes": 268435456000
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Sql/servers', format('{0}-sql-{1}', variables('resourcePrefix'), variables('uniqueSuffix')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Sql/servers/firewallRules",
+              "apiVersion": "2023-08-01-preview",
+              "name": "[format('{0}/{1}', format('{0}-sql-{1}', variables('resourcePrefix'), variables('uniqueSuffix')), 'AllowAzureServices')]",
+              "properties": {
+                "startIpAddress": "0.0.0.0",
+                "endIpAddress": "0.0.0.0"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Sql/servers', format('{0}-sql-{1}', variables('resourcePrefix'), variables('uniqueSuffix')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Sql/servers",
+              "apiVersion": "2023-08-01-preview",
+              "name": "[format('{0}-sql-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "administratorLogin": "[parameters('sqlAdminUsername')]",
+                "administratorLoginPassword": "[parameters('sqlAdminPassword')]",
+                "version": "12.0",
+                "minimalTlsVersion": "1.2",
+                "publicNetworkAccess": "Enabled"
+              }
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults",
+              "apiVersion": "2023-07-01",
+              "name": "[variables('keyVaultName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "sku": {
+                  "family": "A",
+                  "name": "standard"
+                },
+                "tenantId": "[tenant().tenantId]",
+                "enabledForDeployment": true,
+                "enabledForTemplateDeployment": true,
+                "enabledForDiskEncryption": false,
+                "enableRbacAuthorization": false,
+                "accessPolicies": "[if(not(equals(parameters('keyVaultAccessPrincipalId'), '')), createArray(createObject('tenantId', tenant().tenantId, 'objectId', parameters('keyVaultAccessPrincipalId'), 'permissions', createObject('secrets', createArray('get', 'list', 'set')))), createArray())]"
+              }
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/secrets",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', variables('keyVaultName'), 'SqlConnectionString')]",
+              "properties": {
+                "value": "[format('Server={0};Database={1};Authentication=Active Directory Default;', reference(resourceId('Microsoft.Sql/servers', format('{0}-sql-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))), '2023-08-01-preview').fullyQualifiedDomainName, parameters('databaseName'))]"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
+                "[resourceId('Microsoft.Sql/servers', format('{0}-sql-{1}', variables('resourcePrefix'), variables('uniqueSuffix')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Web/serverfarms",
+              "apiVersion": "2023-12-01",
+              "name": "[format('{0}-asp-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "[parameters('appServicePlanSku')]"
+              },
+              "kind": "linux",
+              "properties": {
+                "reserved": true
+              }
+            },
+            {
+              "type": "Microsoft.Web/sites",
+              "apiVersion": "2023-12-01",
+              "name": "[format('{0}-api-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "kind": "app,linux",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', format('{0}-asp-{1}', variables('resourcePrefix'), variables('uniqueSuffix')))]",
+                "siteConfig": {
+                  "linuxFxVersion": "PYTHON|3.11",
+                  "alwaysOn": true,
+                  "appSettings": [
+                    {
+                      "name": "WEBSITES_ENABLE_APP_SERVICE_STORAGE",
+                      "value": "false"
+                    },
+                    {
+                      "name": "SCM_DO_BUILD_DURING_DEPLOYMENT",
+                      "value": "1"
+                    },
+                    {
+                      "name": "KEY_VAULT_URL",
+                      "value": "[reference(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), '2023-07-01').vaultUri]"
+                    },
+                    {
+                      "name": "SQL_SERVER",
+                      "value": "[reference(resourceId('Microsoft.Sql/servers', format('{0}-sql-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))), '2023-08-01-preview').fullyQualifiedDomainName]"
+                    },
+                    {
+                      "name": "SQL_DATABASE",
+                      "value": "[parameters('databaseName')]"
+                    }
+                  ]
+                },
+                "httpsOnly": true
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', format('{0}-asp-{1}', variables('resourcePrefix'), variables('uniqueSuffix')))]",
+                "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
+                "[resourceId('Microsoft.Sql/servers', format('{0}-sql-{1}', variables('resourcePrefix'), variables('uniqueSuffix')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Web/sites",
+              "apiVersion": "2023-12-01",
+              "name": "[format('{0}-web-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "kind": "app,linux",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', format('{0}-asp-{1}', variables('resourcePrefix'), variables('uniqueSuffix')))]",
+                "siteConfig": {
+                  "linuxFxVersion": "PYTHON|3.11",
+                  "alwaysOn": true,
+                  "appSettings": [
+                    {
+                      "name": "WEBSITES_ENABLE_APP_SERVICE_STORAGE",
+                      "value": "false"
+                    },
+                    {
+                      "name": "SCM_DO_BUILD_DURING_DEPLOYMENT",
+                      "value": "1"
+                    },
+                    {
+                      "name": "API_BASE_URL",
+                      "value": "[format('https://{0}/api', reference(resourceId('Microsoft.Web/sites', format('{0}-api-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))), '2023-12-01').defaultHostName)]"
+                    }
+                  ]
+                },
+                "httpsOnly": true
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', format('{0}-api-{1}', variables('resourcePrefix'), variables('uniqueSuffix')))]",
+                "[resourceId('Microsoft.Web/serverfarms', format('{0}-asp-{1}', variables('resourcePrefix'), variables('uniqueSuffix')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Storage/storageAccounts",
+              "apiVersion": "2023-05-01",
+              "name": "[format('{0}st{1}', replace(variables('resourcePrefix'), '-', ''), variables('uniqueSuffix'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "Standard_LRS"
+              },
+              "kind": "StorageV2",
+              "properties": {
+                "supportsHttpsTrafficOnly": true,
+                "minimumTlsVersion": "TLS1_2",
+                "allowBlobPublicAccess": false,
+                "networkAcls": {
+                  "bypass": "AzureServices",
+                  "defaultAction": "Allow"
+                },
+                "publicNetworkAccess": "Enabled"
+              }
+            },
+            {
+              "type": "Microsoft.Web/sites",
+              "apiVersion": "2023-12-01",
+              "name": "[format('{0}-func-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "kind": "functionapp,linux",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', format('{0}-asp-{1}', variables('resourcePrefix'), variables('uniqueSuffix')))]",
+                "siteConfig": {
+                  "linuxFxVersion": "PYTHON|3.11",
+                  "appSettings": [
+                    {
+                      "name": "AzureWebJobsStorage",
+                      "value": "[format('DefaultEndpointsProtocol=https;AccountName={0};AccountKey={1};EndpointSuffix={2}', format('{0}st{1}', replace(variables('resourcePrefix'), '-', ''), variables('uniqueSuffix')), listKeys(resourceId('Microsoft.Storage/storageAccounts', format('{0}st{1}', replace(variables('resourcePrefix'), '-', ''), variables('uniqueSuffix'))), '2023-05-01').keys[0].value, environment().suffixes.storage)]"
+                    },
+                    {
+                      "name": "WEBSITE_RUN_FROM_PACKAGE",
+                      "value": "1"
+                    },
+                    {
+                      "name": "FUNCTIONS_EXTENSION_VERSION",
+                      "value": "~4"
+                    },
+                    {
+                      "name": "FUNCTIONS_WORKER_RUNTIME",
+                      "value": "python"
+                    },
+                    {
+                      "name": "API_URL",
+                      "value": "[format('https://{0}', reference(resourceId('Microsoft.Web/sites', format('{0}-api-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))), '2023-12-01').defaultHostName)]"
+                    }
+                  ]
+                },
+                "httpsOnly": true
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', format('{0}-api-{1}', variables('resourcePrefix'), variables('uniqueSuffix')))]",
+                "[resourceId('Microsoft.Web/serverfarms', format('{0}-asp-{1}', variables('resourcePrefix'), variables('uniqueSuffix')))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', format('{0}st{1}', replace(variables('resourcePrefix'), '-', ''), variables('uniqueSuffix')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.Storage/storageAccounts/{0}', format('{0}st{1}', replace(variables('resourcePrefix'), '-', ''), variables('uniqueSuffix')))]",
+              "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', format('{0}st{1}', replace(variables('resourcePrefix'), '-', ''), variables('uniqueSuffix'))), resourceId('Microsoft.Web/sites', format('{0}-func-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))), 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]",
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', format('{0}-func-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))), '2023-12-01', 'full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', format('{0}-func-{1}', variables('resourcePrefix'), variables('uniqueSuffix')))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', format('{0}st{1}', replace(variables('resourcePrefix'), '-', ''), variables('uniqueSuffix')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.Storage/storageAccounts/{0}', format('{0}st{1}', replace(variables('resourcePrefix'), '-', ''), variables('uniqueSuffix')))]",
+              "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', format('{0}st{1}', replace(variables('resourcePrefix'), '-', ''), variables('uniqueSuffix'))), resourceId('Microsoft.Web/sites', format('{0}-func-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))), '69566ab7-960f-475b-8e7c-b3118f30c6bd')]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '69566ab7-960f-475b-8e7c-b3118f30c6bd')]",
+                "principalId": "[reference(resourceId('Microsoft.Web/sites', format('{0}-func-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))), '2023-12-01', 'full').identity.principalId]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', format('{0}-func-{1}', variables('resourcePrefix'), variables('uniqueSuffix')))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', format('{0}st{1}', replace(variables('resourcePrefix'), '-', ''), variables('uniqueSuffix')))]"
+              ]
+            },
+            {
+              "type": "Microsoft.KeyVault/vaults/accessPolicies",
+              "apiVersion": "2023-07-01",
+              "name": "[format('{0}/{1}', variables('keyVaultName'), 'add')]",
+              "properties": {
+                "accessPolicies": [
+                  {
+                    "tenantId": "[tenant().tenantId]",
+                    "objectId": "[reference(resourceId('Microsoft.Web/sites', format('{0}-api-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))), '2023-12-01', 'full').identity.principalId]",
+                    "permissions": {
+                      "secrets": [
+                        "get",
+                        "list"
+                      ]
+                    }
+                  },
+                  {
+                    "tenantId": "[tenant().tenantId]",
+                    "objectId": "[reference(resourceId('Microsoft.Web/sites', format('{0}-func-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))), '2023-12-01', 'full').identity.principalId]",
+                    "permissions": {
+                      "secrets": [
+                        "get",
+                        "list"
+                      ]
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', format('{0}-api-{1}', variables('resourcePrefix'), variables('uniqueSuffix')))]",
+                "[resourceId('Microsoft.Web/sites', format('{0}-func-{1}', variables('resourcePrefix'), variables('uniqueSuffix')))]",
+                "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "sqlServerName": {
+              "type": "string",
+              "value": "[format('{0}-sql-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]"
+            },
+            "sqlServerFqdn": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Sql/servers', format('{0}-sql-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))), '2023-08-01-preview').fullyQualifiedDomainName]"
+            },
+            "databaseName": {
+              "type": "string",
+              "value": "[parameters('databaseName')]"
+            },
+            "keyVaultName": {
+              "type": "string",
+              "value": "[variables('keyVaultName')]"
+            },
+            "keyVaultUri": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), '2023-07-01').vaultUri]"
+            },
+            "apiAppName": {
+              "type": "string",
+              "value": "[format('{0}-api-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]"
+            },
+            "apiAppUrl": {
+              "type": "string",
+              "value": "[format('https://{0}', reference(resourceId('Microsoft.Web/sites', format('{0}-api-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))), '2023-12-01').defaultHostName)]"
+            },
+            "frontendAppName": {
+              "type": "string",
+              "value": "[format('{0}-web-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]"
+            },
+            "frontendAppUrl": {
+              "type": "string",
+              "value": "[format('https://{0}', reference(resourceId('Microsoft.Web/sites', format('{0}-web-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))), '2023-12-01').defaultHostName)]"
+            },
+            "functionAppName": {
+              "type": "string",
+              "value": "[format('{0}-func-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))]"
+            },
+            "apiAppPrincipalId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Web/sites', format('{0}-api-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))), '2023-12-01', 'full').identity.principalId]"
+            },
+            "functionAppPrincipalId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.Web/sites', format('{0}-func-{1}', variables('resourcePrefix'), variables('uniqueSuffix'))), '2023-12-01', 'full').identity.principalId]"
+            }
+          }
+        }
+      }
+    },
+    {
+      "condition": "[parameters('deployAVD')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "avd-deployment",
+      "resourceGroup": "[parameters('avdResourceGroup')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
+          },
+          "hostPoolName": {
+            "value": "[parameters('avdHostPoolName')]"
+          },
+          "sessionHostCount": {
+            "value": "[parameters('avdSessionHostCount')]"
+          },
+          "maxSessionLimit": {
+            "value": 10
+          },
+          "vmNamePrefix": {
+            "value": "[substring(parameters('projectName'), 0, min(length(parameters('projectName')), 8))]"
+          },
+          "vmSize": {
+            "value": "[parameters('avdVmSize')]"
+          },
+          "adminUsername": {
+            "value": "[parameters('avdAdminUsername')]"
+          },
+          "adminPassword": {
+            "value": "[parameters('avdAdminPassword')]"
+          },
+          "vnetName": {
+            "value": "[parameters('vnetName')]"
+          },
+          "subnetName": {
+            "value": "[parameters('subnetName')]"
+          },
+          "vnetResourceGroup": {
+            "value": "[parameters('vnetResourceGroup')]"
+          },
+          "linuxBrokerApiBaseUrl": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'infrastructure-deployment'), '2025-04-01').outputs.apiAppUrl.value]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "languageVersion": "2.0",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.38.33.27573",
+              "templateHash": "17907272316923898042"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]"
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {}
+            },
+            "vnetName": {
+              "type": "string"
+            },
+            "subnetName": {
+              "type": "string"
+            },
+            "vnetResourceGroup": {
+              "type": "string"
+            },
+            "hostPoolName": {
+              "type": "string"
+            },
+            "friendlyName": {
+              "type": "string",
+              "defaultValue": "[parameters('hostPoolName')]"
+            },
+            "loadBalancerType": {
+              "type": "string",
+              "defaultValue": "BreadthFirst"
+            },
+            "preferredAppGroupType": {
+              "type": "string",
+              "defaultValue": "Desktop"
+            },
+            "sessionHostCount": {
+              "type": "int"
+            },
+            "maxSessionLimit": {
+              "type": "int"
+            },
+            "tokenValidityLength": {
+              "type": "string",
+              "defaultValue": "PT8H",
+              "metadata": {
+                "description": "Token validity duration in ISO 8601 format"
+              }
+            },
+            "baseTime": {
+              "type": "string",
+              "defaultValue": "[utcNow('u')]",
+              "metadata": {
+                "description": "Generated. Do not provide a value! This date value is used to generate a registration token."
+              }
+            },
+            "agentUpdate": {
+              "type": "object",
+              "defaultValue": {
+                "type": "Scheduled",
+                "useSessionHostLocalTime": true,
+                "maintenanceWindowTimeZone": "UTC",
+                "maintenanceWindows": [
+                  {
+                    "dayOfWeek": "Saturday",
+                    "hour": 2,
+                    "duration": "02:00"
+                  }
+                ]
+              },
+              "metadata": {
+                "description": "Agent update configuration"
+              }
+            },
+            "vmNamePrefix": {
+              "type": "string",
+              "maxLength": 10
+            },
+            "vmSize": {
+              "type": "string",
+              "allowedValues": [
+                "Standard_DS2_v2",
+                "Standard_D8s_v5",
+                "Standard_D8s_v4",
+                "Standard_F8s_v2",
+                "Standard_D8as_v4",
+                "Standard_D16s_v5",
+                "Standard_D16s_v4",
+                "Standard_F16s_v2",
+                "Standard_D16as_v4"
+              ],
+              "metadata": {
+                "description": "The size of the session host VMs"
+              }
+            },
+            "adminUsername": {
+              "type": "string"
+            },
+            "adminPassword": {
+              "type": "securestring"
+            },
+            "linuxBrokerApiBaseUrl": {
+              "type": "string",
+              "metadata": {
+                "description": "Base URL for the AVD Linux Broker API"
+              }
+            },
+            "linuxBrokerConfigScriptUri": {
+              "type": "string",
+              "defaultValue": "https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDAccess/refs/heads/main/custom_script_extensions/Configure-AVD-Host.ps1",
+              "metadata": {
+                "description": "URI for the AVD Linux Broker configuration script"
+              }
+            }
+          },
+          "variables": {
+            "copy": [
+              {
+                "name": "vmNames",
+                "count": "[length(range(1, parameters('sessionHostCount')))]",
+                "input": "[format('{0}-{1}', parameters('vmNamePrefix'), padLeft(range(1, parameters('sessionHostCount'))[copyIndex('vmNames')], 2, '0'))]"
+              }
+            ],
+            "osImage": "microsoftwindowsdesktop:Windows-11:win11-24h2-avd:latest",
+            "storageAccountName": "wvdportalstorageblob",
+            "containerName": "galleryartifacts",
+            "blobName01": "Configuration_1.0.02990.697.zip",
+            "AVDartifactsLocation": "[format('https://{0}.blob.{1}/{2}/{3}', variables('storageAccountName'), environment().suffixes.storage, variables('containerName'), variables('blobName01'))]",
+            "intune": false,
+            "aadJoin": true,
+            "aadJoinPreview": false
+          },
+          "resources": {
+            "hostPool": {
+              "type": "Microsoft.DesktopVirtualization/hostPools",
+              "apiVersion": "2024-04-03",
+              "name": "[parameters('hostPoolName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "friendlyName": "[parameters('friendlyName')]",
+                "hostPoolType": "Pooled",
+                "preferredAppGroupType": "[parameters('preferredAppGroupType')]",
+                "loadBalancerType": "[parameters('loadBalancerType')]",
+                "maxSessionLimit": "[parameters('maxSessionLimit')]",
+                "startVMOnConnect": false,
+                "validationEnvironment": false,
+                "agentUpdate": "[parameters('agentUpdate')]",
+                "registrationInfo": {
+                  "expirationTime": "[dateTimeAdd(parameters('baseTime'), parameters('tokenValidityLength'))]",
+                  "registrationTokenOperation": "Update"
+                }
+              }
+            },
+            "desktopAppGroup": {
+              "type": "Microsoft.DesktopVirtualization/applicationGroups",
+              "apiVersion": "2024-04-03",
+              "name": "[format('{0}-desktopAppGroup', parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "applicationGroupType": "Desktop",
+                "hostPoolArmPath": "[resourceId('Microsoft.DesktopVirtualization/hostpools', parameters('hostPoolName'))]"
+              },
+              "dependsOn": [
+                "hostPool"
+              ]
+            },
+            "workspace": {
+              "type": "Microsoft.DesktopVirtualization/workspaces",
+              "apiVersion": "2024-11-01-preview",
+              "name": "[format('{0}-workspace', parameters('hostPoolName'))]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "friendlyName": "[format('{0} Workspace', parameters('friendlyName'))]",
+                "applicationGroupReferences": [
+                  "[resourceId('Microsoft.DesktopVirtualization/applicationGroups', format('{0}-desktopAppGroup', parameters('hostPoolName')))]"
+                ]
+              },
+              "dependsOn": [
+                "desktopAppGroup"
+              ]
+            },
+            "existingVNet": {
+              "existing": true,
+              "type": "Microsoft.Network/virtualNetworks",
+              "apiVersion": "2021-05-01",
+              "resourceGroup": "[parameters('vnetResourceGroup')]",
+              "name": "[parameters('vnetName')]"
+            },
+            "existingSubnet": {
+              "existing": true,
+              "type": "Microsoft.Network/virtualNetworks/subnets",
+              "apiVersion": "2021-05-01",
+              "resourceGroup": "[parameters('vnetResourceGroup')]",
+              "name": "[format('{0}/{1}', parameters('vnetName'), parameters('subnetName'))]"
+            },
+            "nic": {
+              "copy": {
+                "name": "nic",
+                "count": "[length(variables('vmNames'))]"
+              },
+              "type": "Microsoft.Network/networkInterfaces",
+              "apiVersion": "2024-05-01",
+              "name": "[format('{0}-nic', variables('vmNames')[copyIndex()])]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "ipConfigurations": [
+                  {
+                    "name": "ipconfig1",
+                    "properties": {
+                      "subnet": {
+                        "id": "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('vnetResourceGroup')), 'Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('subnetName'))]"
+                      },
+                      "privateIPAllocationMethod": "Dynamic"
+                    }
+                  }
+                ]
+              },
+              "dependsOn": [
+                "existingSubnet",
+                "existingVNet"
+              ]
+            },
+            "vmSessionHost": {
+              "copy": {
+                "name": "vmSessionHost",
+                "count": "[length(variables('vmNames'))]"
+              },
+              "type": "Microsoft.Compute/virtualMachines",
+              "apiVersion": "2024-11-01",
+              "name": "[variables('vmNames')[copyIndex()]]",
+              "location": "[parameters('location')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "hardwareProfile": {
+                  "vmSize": "[parameters('vmSize')]"
+                },
+                "osProfile": {
+                  "computerName": "[variables('vmNames')[copyIndex()]]",
+                  "adminUsername": "[parameters('adminUsername')]",
+                  "adminPassword": "[parameters('adminPassword')]"
+                },
+                "storageProfile": {
+                  "imageReference": {
+                    "publisher": "[split(variables('osImage'), ':')[0]]",
+                    "offer": "[split(variables('osImage'), ':')[1]]",
+                    "sku": "[split(variables('osImage'), ':')[2]]",
+                    "version": "[split(variables('osImage'), ':')[3]]"
+                  },
+                  "osDisk": {
+                    "createOption": "FromImage",
+                    "managedDisk": {
+                      "storageAccountType": "Premium_LRS"
+                    }
+                  }
+                },
+                "networkProfile": {
+                  "networkInterfaces": [
+                    {
+                      "id": "[resourceId('Microsoft.Network/networkInterfaces', format('{0}-nic', variables('vmNames')[copyIndex()]))]"
+                    }
+                  ]
+                },
+                "diagnosticsProfile": {
+                  "bootDiagnostics": {
+                    "enabled": true,
+                    "storageUri": ""
+                  }
+                },
+                "securityProfile": {
+                  "securityType": "TrustedLaunch",
+                  "uefiSettings": {
+                    "secureBootEnabled": true,
+                    "vTpmEnabled": true
+                  }
+                }
+              },
+              "dependsOn": [
+                "hostPoolRegistrationToken",
+                "[format('nic[{0}]', copyIndex())]",
+                "[format('nic[{0}]', copyIndex())]"
+              ]
+            },
+            "entraloginExtension": {
+              "copy": {
+                "name": "entraloginExtension",
+                "count": "[length(variables('vmNames'))]"
+              },
+              "type": "Microsoft.Compute/virtualMachines/extensions",
+              "apiVersion": "2024-11-01",
+              "name": "[format('{0}/AADLoginForWindows', variables('vmNames')[copyIndex()])]",
+              "location": "[resourceGroup().location]",
+              "properties": {
+                "publisher": "Microsoft.Azure.ActiveDirectory",
+                "type": "AADLoginForWindows",
+                "typeHandlerVersion": "2.0",
+                "autoUpgradeMinorVersion": true,
+                "settings": "[if(variables('intune'), createObject('mdmId', '0000000a-0000-0000-c000-000000000000'), null())]"
+              },
+              "dependsOn": [
+                "[format('nic[{0}]', copyIndex())]",
+                "[format('vmSessionHost[{0}]', copyIndex())]"
+              ]
+            },
+            "avdDscExtension": {
+              "copy": {
+                "name": "avdDscExtension",
+                "count": "[length(variables('vmNames'))]"
+              },
+              "type": "Microsoft.Compute/virtualMachines/extensions",
+              "apiVersion": "2024-11-01",
+              "name": "[format('{0}/Microsoft.PowerShell.DSC', variables('vmNames')[copyIndex()])]",
+              "location": "[resourceGroup().location]",
+              "properties": {
+                "publisher": "Microsoft.Powershell",
+                "type": "DSC",
+                "typeHandlerVersion": "2.83",
+                "autoUpgradeMinorVersion": true,
+                "settings": {
+                  "modulesUrl": "[variables('AVDartifactsLocation')]",
+                  "configurationFunction": "Configuration.ps1\\AddSessionHost",
+                  "properties": {
+                    "hostPoolName": "[parameters('hostPoolName')]",
+                    "registrationInfoTokenCredential": {
+                      "UserName": "PLACEHOLDER_DO_NOT_USE",
+                      "Password": "PrivateSettingsRef:RegistrationInfoToken"
+                    },
+                    "aadJoin": "[variables('aadJoin')]",
+                    "UseAgentDownloadEndpoint": true,
+                    "aadJoinPreview": "[variables('aadJoinPreview')]",
+                    "mdmId": "[if(variables('intune'), '0000000a-0000-0000-c000-000000000000', '')]",
+                    "sessionHostConfigurationLastUpdateTime": ""
+                  }
+                },
+                "protectedSettings": {
+                  "Items": {
+                    "RegistrationInfoToken": "[listOutputsWithSecureValues('hostPoolRegistrationToken', '2025-04-01').registrationToken]"
+                  }
+                }
+              },
+              "dependsOn": [
+                "[format('entraloginExtension[{0}]', copyIndex())]",
+                "hostPool",
+                "hostPoolRegistrationToken",
+                "[format('vmSessionHost[{0}]', copyIndex())]"
+              ]
+            },
+            "linuxBrokerConfig": {
+              "copy": {
+                "name": "linuxBrokerConfig",
+                "count": "[length(variables('vmNames'))]"
+              },
+              "type": "Microsoft.Compute/virtualMachines/extensions",
+              "apiVersion": "2024-11-01",
+              "name": "[format('{0}/CustomScriptExtension', variables('vmNames')[copyIndex()])]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "publisher": "Microsoft.Compute",
+                "type": "CustomScriptExtension",
+                "typeHandlerVersion": "1.10",
+                "autoUpgradeMinorVersion": true,
+                "settings": {
+                  "fileUris": "[array(parameters('linuxBrokerConfigScriptUri'))]"
+                },
+                "protectedSettings": {
+                  "commandToExecute": "[format('powershell -ExecutionPolicy Unrestricted -File Configure-AVD-Host.ps1 -LinuxBrokerApiBaseUrl \"{0}\"', parameters('linuxBrokerApiBaseUrl'))]"
+                }
+              },
+              "dependsOn": [
+                "[format('avdDscExtension[{0}]', copyIndex())]",
+                "[format('entraloginExtension[{0}]', copyIndex())]",
+                "hostPoolRegistrationToken",
+                "[format('vmSessionHost[{0}]', copyIndex())]"
+              ]
+            },
+            "hostPoolRegistrationToken": {
+              "type": "Microsoft.Resources/deployments",
+              "apiVersion": "2025-04-01",
+              "name": "hostPoolRegistrationToken",
+              "properties": {
+                "expressionEvaluationOptions": {
+                  "scope": "inner"
+                },
+                "mode": "Incremental",
+                "parameters": {
+                  "hostPoolName": {
+                    "value": "[parameters('hostPoolName')]"
+                  },
+                  "tags": {
+                    "value": "[reference('hostPool', '2024-04-03', 'full').tags]"
+                  },
+                  "location": {
+                    "value": "[reference('hostPool', '2024-04-03', 'full').location]"
+                  },
+                  "hostPoolType": {
+                    "value": "[reference('hostPool').hostPoolType]"
+                  },
+                  "friendlyName": {
+                    "value": "[reference('hostPool').friendlyName]"
+                  },
+                  "loadBalancerType": {
+                    "value": "[reference('hostPool').loadBalancerType]"
+                  },
+                  "preferredAppGroupType": {
+                    "value": "[reference('hostPool').preferredAppGroupType]"
+                  },
+                  "maxSessionLimit": {
+                    "value": "[reference('hostPool').maxSessionLimit]"
+                  },
+                  "startVMOnConnect": {
+                    "value": "[reference('hostPool').startVMOnConnect]"
+                  },
+                  "validationEnvironment": {
+                    "value": "[reference('hostPool').validationEnvironment]"
+                  },
+                  "agentUpdate": {
+                    "value": "[reference('hostPool').agentUpdate]"
+                  }
+                },
+                "template": {
+                  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                  "languageVersion": "2.0",
+                  "contentVersion": "1.0.0.0",
+                  "metadata": {
+                    "_generator": {
+                      "name": "bicep",
+                      "version": "0.38.33.27573",
+                      "templateHash": "17692711799774058285"
+                    }
+                  },
+                  "parameters": {
+                    "location": {
+                      "type": "string",
+                      "defaultValue": "[resourceGroup().location]"
+                    },
+                    "tags": {
+                      "type": "object",
+                      "defaultValue": {}
+                    },
+                    "hostPoolName": {
+                      "type": "string"
+                    },
+                    "friendlyName": {
+                      "type": "string"
+                    },
+                    "hostPoolType": {
+                      "type": "string"
+                    },
+                    "loadBalancerType": {
+                      "type": "string"
+                    },
+                    "preferredAppGroupType": {
+                      "type": "string"
+                    },
+                    "maxSessionLimit": {
+                      "type": "int"
+                    },
+                    "startVMOnConnect": {
+                      "type": "bool"
+                    },
+                    "validationEnvironment": {
+                      "type": "bool"
+                    },
+                    "agentUpdate": {
+                      "type": "object"
+                    },
+                    "tokenValidityLength": {
+                      "type": "string",
+                      "defaultValue": "PT8H",
+                      "metadata": {
+                        "description": "Token validity duration in ISO 8601 format"
+                      }
+                    },
+                    "baseTime": {
+                      "type": "string",
+                      "defaultValue": "[utcNow('u')]",
+                      "metadata": {
+                        "description": "Generated. Do not provide a value! This date value is used to generate a registration token."
+                      }
+                    }
+                  },
+                  "resources": {
+                    "hostPoolTokenUpdate": {
+                      "type": "Microsoft.DesktopVirtualization/hostPools",
+                      "apiVersion": "2024-04-03",
+                      "name": "[parameters('hostPoolName')]",
+                      "location": "[parameters('location')]",
+                      "tags": "[parameters('tags')]",
+                      "properties": {
+                        "friendlyName": "[parameters('friendlyName')]",
+                        "hostPoolType": "[parameters('hostPoolType')]",
+                        "loadBalancerType": "[parameters('loadBalancerType')]",
+                        "preferredAppGroupType": "[parameters('preferredAppGroupType')]",
+                        "maxSessionLimit": "[parameters('maxSessionLimit')]",
+                        "startVMOnConnect": "[parameters('startVMOnConnect')]",
+                        "validationEnvironment": "[parameters('validationEnvironment')]",
+                        "agentUpdate": "[parameters('agentUpdate')]",
+                        "registrationInfo": {
+                          "expirationTime": "[dateTimeAdd(parameters('baseTime'), parameters('tokenValidityLength'))]",
+                          "registrationTokenOperation": "Update"
+                        }
+                      }
+                    }
+                  },
+                  "outputs": {
+                    "registrationToken": {
+                      "type": "securestring",
+                      "value": "[first(listRegistrationTokens('hostPoolTokenUpdate', '2024-04-03').value).token]"
+                    }
+                  }
+                }
+              },
+              "dependsOn": [
+                "desktopAppGroup",
+                "hostPool",
+                "workspace"
+              ]
+            }
+          },
+          "outputs": {
+            "hostPoolName": {
+              "type": "string",
+              "value": "[parameters('hostPoolName')]"
+            },
+            "workspaceName": {
+              "type": "string",
+              "value": "[format('{0}-workspace', parameters('hostPoolName'))]"
+            },
+            "vmNames": {
+              "type": "array",
+              "value": "[variables('vmNames')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'infrastructure-deployment')]"
+      ]
+    },
+    {
+      "condition": "[parameters('deployLinuxVMs')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "linux-vm-deployment",
+      "resourceGroup": "[parameters('linuxResourceGroup')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
+          },
+          "vmNamePrefix": {
+            "value": "[format('{0}-linux', parameters('projectName'))]"
+          },
+          "vmSize": {
+            "value": "[parameters('linuxVmSize')]"
+          },
+          "numberOfVMs": {
+            "value": "[parameters('linuxVmCount')]"
+          },
+          "OSVersion": {
+            "value": "[parameters('linuxOSVersion')]"
+          },
+          "authType": {
+            "value": "Password"
+          },
+          "adminUsername": {
+            "value": "[parameters('linuxAdminUsername')]"
+          },
+          "adminPassword": {
+            "value": "[parameters('linuxAdminPassword')]"
+          },
+          "vnetName": {
+            "value": "[parameters('vnetName')]"
+          },
+          "subnetName": {
+            "value": "[parameters('subnetName')]"
+          },
+          "vnetResourceGroup": {
+            "value": "[parameters('vnetResourceGroup')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.38.33.27573",
+              "templateHash": "2492447087855453932"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string",
+              "defaultValue": "[resourceGroup().location]"
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {}
+            },
+            "vnetName": {
+              "type": "string"
+            },
+            "subnetName": {
+              "type": "string"
+            },
+            "vnetResourceGroup": {
+              "type": "string"
+            },
+            "vmNamePrefix": {
+              "type": "string"
+            },
+            "vmSize": {
+              "type": "string"
+            },
+            "numberOfVMs": {
+              "type": "int",
+              "minValue": 1,
+              "maxValue": 20
+            },
+            "authType": {
+              "type": "string",
+              "allowedValues": [
+                "Password",
+                "SSH"
+              ]
+            },
+            "adminUsername": {
+              "type": "string"
+            },
+            "adminPassword": {
+              "type": "securestring"
+            },
+            "sshPublicKey": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "OSVersion": {
+              "type": "string",
+              "allowedValues": [
+                "7-LVM",
+                "8-LVM",
+                "9-LVM",
+                "24_04-lts"
+              ]
+            }
+          },
+          "variables": {
+            "copy": [
+              {
+                "name": "vmNames",
+                "count": "[length(range(1, parameters('numberOfVMs')))]",
+                "input": "[format('{0}-{1}', parameters('vmNamePrefix'), padLeft(range(1, parameters('numberOfVMs'))[copyIndex('vmNames')], 2, '0'))]"
+              }
+            ],
+            "adminPass": "[if(equals(parameters('authType'), 'Password'), parameters('adminPassword'), parameters('sshPublicKey'))]",
+            "imageConfigs": {
+              "7-LVM": {
+                "image": {
+                  "publisher": "RedHat",
+                  "offer": "RHEL",
+                  "sku": "7-LVM",
+                  "version": "latest"
+                },
+                "script": {
+                  "uri": "https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDAccess/refs/heads/main/custom_script_extensions/Configure-RHEL7-Host.sh",
+                  "cmd": "bash Configure-RHEL7-Host.sh"
+                }
+              },
+              "8-LVM": {
+                "image": {
+                  "publisher": "RedHat",
+                  "offer": "RHEL",
+                  "sku": "8-LVM",
+                  "version": "latest"
+                },
+                "script": {
+                  "uri": "https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDAccess/refs/heads/main/custom_script_extensions/Configure-RHEL8-Host.sh",
+                  "cmd": "bash Configure-RHEL8-Host.sh"
+                }
+              },
+              "9-LVM": {
+                "image": {
+                  "publisher": "RedHat",
+                  "offer": "RHEL",
+                  "sku": "9-LVM",
+                  "version": "latest"
+                },
+                "script": {
+                  "uri": "https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDAccess/refs/heads/main/custom_script_extensions/Configure-RHEL9-Host.sh",
+                  "cmd": "bash Configure-RHEL9-Host.sh"
+                }
+              },
+              "24_04-lts": {
+                "image": {
+                  "publisher": "canonical",
+                  "offer": "ubuntu-24_04-lts",
+                  "sku": "server",
+                  "version": "latest"
+                },
+                "script": {
+                  "uri": "https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDAccess/refs/heads/main/custom_script_extensions/Configure-Ubuntu24_desktop-Host.sh",
+                  "cmd": "bash Configure-Ubuntu24_desktop-Host.sh"
+                }
+              }
+            },
+            "selectedConfig": "[variables('imageConfigs')[parameters('OSVersion')]]"
+          },
+          "resources": [
+            {
+              "copy": {
+                "name": "nic",
+                "count": "[length(variables('vmNames'))]"
+              },
+              "type": "Microsoft.Network/networkInterfaces",
+              "apiVersion": "2024-05-01",
+              "name": "[format('{0}-nic', variables('vmNames')[copyIndex()])]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "ipConfigurations": [
+                  {
+                    "name": "ipconfig1",
+                    "properties": {
+                      "subnet": {
+                        "id": "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('vnetResourceGroup')), 'Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('subnetName'))]"
+                      },
+                      "privateIPAllocationMethod": "Dynamic"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "copy": {
+                "name": "vmLinuxHost",
+                "count": "[length(variables('vmNames'))]"
+              },
+              "type": "Microsoft.Compute/virtualMachines",
+              "apiVersion": "2022-03-01",
+              "name": "[variables('vmNames')[copyIndex()]]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "SystemAssigned"
+              },
+              "properties": {
+                "hardwareProfile": {
+                  "vmSize": "[parameters('vmSize')]"
+                },
+                "osProfile": {
+                  "computerName": "[variables('vmNames')[copyIndex()]]",
+                  "adminUsername": "[parameters('adminUsername')]",
+                  "adminPassword": "[variables('adminPass')]",
+                  "linuxConfiguration": "[if(equals(parameters('authType'), 'SSH'), createObject('disablePasswordAuthentication', true(), 'ssh', createObject('publicKeys', createArray(createObject('path', format('/home/{0}/.ssh/authorized_keys', parameters('adminUsername')), 'keyData', parameters('sshPublicKey'))))), createObject('disablePasswordAuthentication', false()))]"
+                },
+                "networkProfile": {
+                  "networkInterfaces": [
+                    {
+                      "id": "[resourceId('Microsoft.Network/networkInterfaces', format('{0}-nic', variables('vmNames')[copyIndex()]))]"
+                    }
+                  ]
+                },
+                "storageProfile": {
+                  "imageReference": "[variables('selectedConfig').image]",
+                  "osDisk": {
+                    "createOption": "FromImage"
+                  }
+                },
+                "securityProfile": {
+                  "securityType": "TrustedLaunch",
+                  "uefiSettings": {
+                    "secureBootEnabled": true,
+                    "vTpmEnabled": true
+                  }
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/networkInterfaces', format('{0}-nic', variables('vmNames')[copyIndex()]))]",
+                "[resourceId('Microsoft.Network/networkInterfaces', format('{0}-nic', variables('vmNames')[copyIndex()]))]"
+              ]
+            },
+            {
+              "copy": {
+                "name": "linuxCustomScriptExtension",
+                "count": "[length(variables('vmNames'))]"
+              },
+              "type": "Microsoft.Compute/virtualMachines/extensions",
+              "apiVersion": "2022-03-01",
+              "name": "[format('{0}/customScript', variables('vmNames')[copyIndex()])]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "publisher": "Microsoft.Azure.Extensions",
+                "type": "CustomScript",
+                "typeHandlerVersion": "2.1",
+                "autoUpgradeMinorVersion": true,
+                "settings": {
+                  "fileUris": [
+                    "[variables('selectedConfig').script.uri]"
+                  ]
+                },
+                "protectedSettings": {
+                  "commandToExecute": "[variables('selectedConfig').script.cmd]"
+                }
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachines', variables('vmNames')[copyIndex()])]"
+              ]
+            }
+          ],
+          "outputs": {
+            "vmNames": {
+              "type": "array",
+              "value": "[variables('vmNames')]"
+            },
+            "adminUsername": {
+              "type": "string",
+              "value": "[parameters('adminUsername')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Resources/deployments', 'infrastructure-deployment')]"
+      ]
+    }
+  ],
+  "outputs": {
+    "infrastructureOutputs": {
+      "type": "object",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'infrastructure-deployment'), '2025-04-01').outputs]"
+    },
+    "apiUrl": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'infrastructure-deployment'), '2025-04-01').outputs.apiAppUrl.value]"
+    },
+    "frontendUrl": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'infrastructure-deployment'), '2025-04-01').outputs.frontendAppUrl.value]"
+    },
+    "sqlServerName": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'infrastructure-deployment'), '2025-04-01').outputs.sqlServerName.value]"
+    },
+    "keyVaultName": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'infrastructure-deployment'), '2025-04-01').outputs.keyVaultName.value]"
+    }
+  }
+}

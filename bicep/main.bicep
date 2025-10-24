@@ -11,6 +11,7 @@ param sqlAdminPassword string
 
 // AVD Configuration (optional)
 param deployAVD bool = false
+param avdResourceGroup string = ''
 param avdHostPoolName string = ''
 param avdSessionHostCount int = 2
 param avdVmSize string = 'Standard_DS2_v2'
@@ -20,6 +21,7 @@ param avdAdminPassword string = ''
 
 // Linux VMs Configuration (optional)
 param deployLinuxVMs bool = false
+param linuxResourceGroup string = ''
 param linuxVmCount int = 2
 param linuxVmSize string = 'Standard_D2s_v3'
 param linuxOSVersion string = '24_04-lts'
@@ -48,6 +50,7 @@ module infrastructure 'infrastructure/main.bicep' = {
 // Deploy AVD hosts (optional)
 module avdDeployment 'AVD/main.bicep' = if (deployAVD) {
   name: 'avd-deployment'
+  scope: resourceGroup(avdResourceGroup)
   params: {
     location: location
     tags: tags
@@ -68,6 +71,7 @@ module avdDeployment 'AVD/main.bicep' = if (deployAVD) {
 // Deploy Linux VMs (optional)
 module linuxVmDeployment 'Linux/main.bicep' = if (deployLinuxVMs) {
   name: 'linux-vm-deployment'
+  scope: resourceGroup(linuxResourceGroup)
   params: {
     location: location
     tags: tags

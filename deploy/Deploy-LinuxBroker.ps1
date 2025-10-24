@@ -21,10 +21,7 @@ param(
     [string]$SqlAdminPassword = "",
     
     [Parameter(Mandatory=$false)]
-    [bool]$DeployAVD = $false,
-    
-    [Parameter(Mandatory=$false)]
-    [bool]$DeployLinuxVMs = $false,
+    [string]$VMConfigPath = "",
     
     [Parameter(Mandatory=$false)]
     [string]$DeploymentName = "LinuxBroker-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
@@ -184,6 +181,83 @@ function Set-FunctionAppPermissions {
 
 Write-TimestampedHost "🚀 Starting Linux Broker for AVD Access deployment..." -ForegroundColor Green
 
+# Load VM configuration if provided
+$vmConfig = $null
+$deployAVD = $false
+$deployLinuxVMs = $false
+
+if (-not [string]::IsNullOrEmpty($VMConfigPath)) {
+    if (Test-Path $VMConfigPath) {
+        try {
+            Write-TimestampedHost "📄 Loading VM configuration from: $VMConfigPath" -ForegroundColor Cyan
+            $vmConfig = Get-Content $VMConfigPath | ConvertFrom-Json
+            
+            # Check deployment flags
+            $deployAVD = $vmConfig.avd.deploy -eq $true
+            $deployLinuxVMs = $vmConfig.linuxVMs.deploy -eq $true
+            
+            Write-TimestampedHost "VM Configuration loaded:" -ForegroundColor White
+            Write-TimestampedHost "  AVD Deployment: $deployAVD" -ForegroundColor White
+            Write-TimestampedHost "  Linux VMs Deployment: $deployLinuxVMs" -ForegroundColor White
+            
+            # Validate required network configuration if deploying VMs
+            if (($deployAVD -or $deployLinuxVMs) -and (-not $vmConfig.network)) {
+                Write-Error "Network configuration is required when deploying AVD or Linux VMs"
+                exit 1
+            }
+            
+            # Validate AVD configuration if deploying AVD
+            if ($deployAVD) {
+                # Validate AVD resource group
+                if ([string]::IsNullOrEmpty($vmConfig.avd.resourceGroup)) {
+                    Write-Error "AVD configuration must include resourceGroup"
+                    exit 1
+                }
+                # Validate AVD network configuration
+                if (-not $vmConfig.network.avd -or 
+                    [string]::IsNullOrEmpty($vmConfig.network.avd.vnetName) -or 
+                    [string]::IsNullOrEmpty($vmConfig.network.avd.subnetName) -or 
+                    [string]::IsNullOrEmpty($vmConfig.network.avd.vnetResourceGroup)) {
+                    Write-Error "AVD network configuration must include avd.vnetName, avd.subnetName, and avd.vnetResourceGroup"
+                    exit 1
+                }
+                Write-TimestampedHost "  AVD Resource Group: $($vmConfig.avd.resourceGroup)" -ForegroundColor White
+                Write-TimestampedHost "  AVD Network: $($vmConfig.network.avd.vnetName)/$($vmConfig.network.avd.subnetName)" -ForegroundColor White
+            }
+            
+            # Validate Linux VMs configuration if deploying Linux VMs
+            if ($deployLinuxVMs) {
+                # Validate Linux VMs resource group
+                if ([string]::IsNullOrEmpty($vmConfig.linuxVMs.resourceGroup)) {
+                    Write-Error "Linux VMs configuration must include resourceGroup"
+                    exit 1
+                }
+                # Validate Linux VMs network configuration
+                if (-not $vmConfig.network.linuxVMs -or 
+                    [string]::IsNullOrEmpty($vmConfig.network.linuxVMs.vnetName) -or 
+                    [string]::IsNullOrEmpty($vmConfig.network.linuxVMs.subnetName) -or 
+                    [string]::IsNullOrEmpty($vmConfig.network.linuxVMs.vnetResourceGroup)) {
+                    Write-Error "Linux VMs network configuration must include linuxVMs.vnetName, linuxVMs.subnetName, and linuxVMs.vnetResourceGroup"
+                    exit 1
+                }
+                Write-TimestampedHost "  Linux VMs Resource Group: $($vmConfig.linuxVMs.resourceGroup)" -ForegroundColor White
+                Write-TimestampedHost "  Linux VMs Network: $($vmConfig.network.linuxVMs.vnetName)/$($vmConfig.network.linuxVMs.subnetName)" -ForegroundColor White
+            }
+            
+        } catch {
+            Write-Error "Failed to parse VM configuration file: $($_.Exception.Message)"
+            Write-TimestampedHost "💡 Example configuration file created at: vm-deployment-config.example.json" -ForegroundColor Yellow
+            exit 1
+        }
+    } else {
+        Write-Error "VM configuration file not found: $VMConfigPath"
+        Write-TimestampedHost "💡 Example configuration file created at: vm-deployment-config.example.json" -ForegroundColor Yellow
+        exit 1
+    }
+} else {
+    Write-TimestampedHost "📋 No VM configuration provided - deploying core infrastructure only" -ForegroundColor Cyan
+}
+
 # Generate random password if not provided
 if ([string]::IsNullOrEmpty($SqlAdminPassword)) {
     # Generate password with alphanumeric characters and safe symbols only
@@ -199,6 +273,19 @@ az account set --subscription $SubscriptionId
 # Create resource group if it doesn't exist
 Write-TimestampedHost "Ensuring resource group exists..." -ForegroundColor Yellow
 az group create --name $ResourceGroupName --location $Location
+
+# Create additional resource groups for VMs if they don't exist
+if ($vmConfig) {
+    if ($deployAVD -and $vmConfig.avd.resourceGroup -ne $ResourceGroupName) {
+        Write-TimestampedHost "Creating AVD resource group: $($vmConfig.avd.resourceGroup)" -ForegroundColor Yellow
+        az group create --name $vmConfig.avd.resourceGroup --location $Location
+    }
+    
+    if ($deployLinuxVMs -and $vmConfig.linuxVMs.resourceGroup -ne $ResourceGroupName) {
+        Write-TimestampedHost "Creating Linux VMs resource group: $($vmConfig.linuxVMs.resourceGroup)" -ForegroundColor Yellow
+        az group create --name $vmConfig.linuxVMs.resourceGroup --location $Location
+    }
+}
 
 # Check for and handle soft-deleted Key Vault
 Write-TimestampedHost "Checking for existing Key Vault..." -ForegroundColor Yellow
@@ -245,39 +332,196 @@ try {
 Write-TimestampedHost "Deploying infrastructure..." -ForegroundColor Yellow
 
 try {
-    $deploymentResult = az deployment group create `
+    # Build parameters array
+    $bicepParameters = @(
+        "projectName=$ProjectName"
+        "environment=$Environment"
+        "sqlAdminPassword=$SqlAdminPassword"
+        "deployAVD=$($deployAVD.ToString().ToLower())"
+        "deployLinuxVMs=$($deployLinuxVMs.ToString().ToLower())"
+    )
+    
+    # Add AVD parameters if deploying AVD
+    if ($deployAVD -and $vmConfig) {
+        $avdConfig = $vmConfig.avd
+        $avdNetwork = $vmConfig.network.avd
+        $bicepParameters += @(
+            "avdResourceGroup=$($avdConfig.resourceGroup)"
+            "avdHostPoolName=$($avdConfig.hostPoolName)"
+            "avdSessionHostCount=$($avdConfig.sessionHostCount)"
+            "avdVmSize=$($avdConfig.vmSize)"
+            "avdAdminUsername=$($avdConfig.adminUsername)"
+            "avdAdminPassword=$($avdConfig.adminPassword)"
+            "vnetName=$($avdNetwork.vnetName)"
+            "subnetName=$($avdNetwork.subnetName)"
+            "vnetResourceGroup=$($avdNetwork.vnetResourceGroup)"
+        )
+        Write-TimestampedHost "Added AVD deployment parameters (RG: $($avdConfig.resourceGroup), Network: $($avdNetwork.vnetName)/$($avdNetwork.subnetName))" -ForegroundColor Cyan
+    }
+    
+    # Add Linux VM parameters if deploying Linux VMs
+    if ($deployLinuxVMs -and $vmConfig) {
+        $linuxConfig = $vmConfig.linuxVMs
+        $linuxNetwork = $vmConfig.network.linuxVMs
+        $bicepParameters += @(
+            "linuxResourceGroup=$($linuxConfig.resourceGroup)"
+            "linuxVmCount=$($linuxConfig.vmCount)"
+            "linuxVmSize=$($linuxConfig.vmSize)"
+            "linuxOSVersion=$($linuxConfig.osVersion)"
+            "linuxAdminUsername=$($linuxConfig.adminUsername)"
+            "linuxAdminPassword=$($linuxConfig.adminPassword)"
+            "vnetName=$($linuxNetwork.vnetName)"
+            "subnetName=$($linuxNetwork.subnetName)"
+            "vnetResourceGroup=$($linuxNetwork.vnetResourceGroup)"
+        )
+        Write-TimestampedHost "Added Linux VM deployment parameters (RG: $($linuxConfig.resourceGroup), Network: $($linuxNetwork.vnetName)/$($linuxNetwork.subnetName))" -ForegroundColor Cyan
+    }
+    
+    # Create parameters file for robust deployment
+    $parametersObject = @{
+        '$schema' = "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#"
+        contentVersion = "1.0.0.0"
+        parameters = @{}
+    }
+    
+    # Convert parameter array to parameters object
+    foreach ($param in $bicepParameters) {
+        $keyValue = $param -split '=', 2
+        if ($keyValue.Length -eq 2) {
+            $key = $keyValue[0].Trim()
+            $value = $keyValue[1].Trim()
+            
+            # Convert values to appropriate types
+            if ($value -eq "true") {
+                # Boolean true
+                $parametersObject.parameters[$key] = @{ value = $true }
+            } elseif ($value -eq "false") {
+                # Boolean false
+                $parametersObject.parameters[$key] = @{ value = $false }
+            } elseif ($value -match '^\d+$') {
+                # Integer (only digits)
+                $parametersObject.parameters[$key] = @{ value = [int]$value }
+            } else {
+                # String (default)
+                $parametersObject.parameters[$key] = @{ value = $value }
+            }
+        }
+    }
+    
+    # Write parameters to temp file
+    $parametersFile = "./temp-params.json"
+    $parametersJson = $parametersObject | ConvertTo-Json -Depth 4
+    $parametersJson | Out-File -FilePath $parametersFile -Encoding UTF8
+    
+    # Debug: Show parameters being used
+    Write-TimestampedHost "Parameters being deployed:" -ForegroundColor Cyan
+    Write-Host $parametersJson -ForegroundColor White
+    Write-TimestampedHost "" -ForegroundColor White
+    
+    # Deploy with better error handling
+    Write-TimestampedHost "Starting Bicep deployment..." -ForegroundColor Cyan
+    Write-TimestampedHost "Parameters file: $parametersFile" -ForegroundColor White
+    
+    # First, validate the deployment (skip validation for now to avoid Azure CLI issues)
+    Write-TimestampedHost "Skipping validation step to avoid Azure CLI parsing issues..." -ForegroundColor Yellow
+    
+    # Now run the actual deployment without capturing JSON output initially
+    Write-TimestampedHost "Executing deployment..." -ForegroundColor Cyan
+    
+    # Run deployment without trying to capture JSON output to avoid Azure CLI issues
+    az deployment group create `
         --resource-group $ResourceGroupName `
         --template-file "./bicep/main.bicep" `
-        --parameters projectName=$ProjectName environment=$Environment sqlAdminPassword=$SqlAdminPassword deployAVD=$($DeployAVD.ToString().ToLower()) deployLinuxVMs=$($DeployLinuxVMs.ToString().ToLower()) `
+        --parameters "@$parametersFile" `
         --name $DeploymentName `
-        --output json | ConvertFrom-Json
+        --verbose `
+        --debug
 
     if ($LASTEXITCODE -ne 0) {
-        Write-Error "Infrastructure deployment failed!"
+        Write-TimestampedHost "❌ Infrastructure deployment failed!" -ForegroundColor Red
+        Write-TimestampedHost "Check the Azure portal for detailed error information" -ForegroundColor Yellow
+        Remove-Item $parametersFile -Force -ErrorAction SilentlyContinue
         exit 1
     }
 
-    # Clean up temp file
-    Remove-Item "./temp-params.json" -Force -ErrorAction SilentlyContinue
-
-    # Get deployment outputs
-    Write-TimestampedHost "Parsing deployment outputs..." -ForegroundColor Cyan
-    $infrastructureOutputs = $deploymentResult.properties.outputs.infrastructureOutputs.value
-    $apiAppName = $infrastructureOutputs.apiAppName.value
-    $frontendAppName = $infrastructureOutputs.frontendAppName.value
-    $functionAppName = $infrastructureOutputs.functionAppName.value
-    $sqlServerName = $deploymentResult.properties.outputs.sqlServerName.value
-    $databaseName = $infrastructureOutputs.databaseName.value
+    Write-TimestampedHost "✅ Deployment completed successfully" -ForegroundColor Green
     
-    Write-TimestampedHost "Deployment outputs parsed:" -ForegroundColor White
-    Write-TimestampedHost "  API App: $apiAppName" -ForegroundColor White
-    Write-TimestampedHost "  Frontend App: $frontendAppName" -ForegroundColor White
-    Write-TimestampedHost "  Function App: $functionAppName" -ForegroundColor White
+    # Now get deployment details in a separate call
+    Write-TimestampedHost "Retrieving deployment details..." -ForegroundColor Cyan
+    $deploymentResult = $null
+    
+    try {
+        $deploymentOutput = az deployment group show `
+            --resource-group $ResourceGroupName `
+            --name $DeploymentName `
+            --output json
+            
+        if ($LASTEXITCODE -eq 0) {
+            $deploymentResult = $deploymentOutput | ConvertFrom-Json
+            Write-TimestampedHost "✅ Retrieved deployment details successfully" -ForegroundColor Green
+        } else {
+            Write-Warning "Could not retrieve deployment details, but deployment appears successful"
+        }
+    } catch {
+        Write-Warning "Could not parse deployment details, but deployment appears successful: $($_.Exception.Message)"
+    }
+
+    # Clean up temp file
+    Remove-Item $parametersFile -Force -ErrorAction SilentlyContinue
+
+    # Get deployment outputs (only if we have deployment result)
+    if ($deploymentResult -and $deploymentResult.properties -and $deploymentResult.properties.outputs) {
+        Write-TimestampedHost "Parsing deployment outputs..." -ForegroundColor Cyan
+        $infrastructureOutputs = $deploymentResult.properties.outputs.infrastructureOutputs.value
+        $apiAppName = $infrastructureOutputs.apiAppName.value
+        $frontendAppName = $infrastructureOutputs.frontendAppName.value
+        $functionAppName = $infrastructureOutputs.functionAppName.value
+        $sqlServerName = $deploymentResult.properties.outputs.sqlServerName.value
+        $databaseName = $infrastructureOutputs.databaseName.value
+    } else {
+        Write-TimestampedHost "Could not retrieve deployment outputs automatically. Attempting to discover resources..." -ForegroundColor Yellow
+        
+        # Try to discover the deployed resources by name pattern
+        $resourcePrefix = "$ProjectName$Environment"
+        try {
+            $resources = az resource list --resource-group $ResourceGroupName --output json | ConvertFrom-Json
+            
+            $apiAppName = ($resources | Where-Object { $_.type -eq "Microsoft.Web/sites" -and $_.name -like "*api*" }).name
+            $frontendAppName = ($resources | Where-Object { $_.type -eq "Microsoft.Web/sites" -and $_.name -like "*frontend*" -or $_.name -like "*web*" }).name  
+            $functionAppName = ($resources | Where-Object { $_.type -eq "Microsoft.Web/sites" -and $_.name -like "*func*" -or $_.name -like "*task*" }).name
+            $sqlServerResource = ($resources | Where-Object { $_.type -eq "Microsoft.Sql/servers" }).name
+            $sqlServerName = $sqlServerResource
+            $databaseName = "$($resourcePrefix)db"
+            
+            if ($apiAppName -and $frontendAppName -and $functionAppName -and $sqlServerName) {
+                Write-TimestampedHost "✅ Successfully discovered deployed resources" -ForegroundColor Green
+            } else {
+                Write-Warning "Could not discover all resources automatically. Some deployment steps may be skipped."
+            }
+        } catch {
+            Write-Warning "Failed to discover deployed resources: $($_.Exception.Message)"
+            Write-TimestampedHost "You may need to configure resources manually via the Azure portal" -ForegroundColor Yellow
+        }
+    }
+    
+    if ($apiAppName -and $frontendAppName -and $functionAppName) {
+        Write-TimestampedHost "Deployment outputs parsed:" -ForegroundColor White
+        Write-TimestampedHost "  API App: $apiAppName" -ForegroundColor White
+        Write-TimestampedHost "  Frontend App: $frontendAppName" -ForegroundColor White
+        Write-TimestampedHost "  Function App: $functionAppName" -ForegroundColor White
+    } else {
+        Write-TimestampedHost "⚠️  Could not determine all resource names automatically" -ForegroundColor Yellow
+        Write-TimestampedHost "Some post-deployment steps may be skipped" -ForegroundColor Yellow
+    }
 
     Write-TimestampedHost "✅ Infrastructure deployed successfully!" -ForegroundColor Green
     
-    # Deploy database schema
-    Write-TimestampedHost "Setting up database schema..." -ForegroundColor Yellow
+    # Deploy database schema (only if we have SQL server name)
+    if ($sqlServerName -and $databaseName) {
+        Write-TimestampedHost "Setting up database schema..." -ForegroundColor Yellow
+    } else {
+        Write-TimestampedHost "⚠️  Skipping database schema setup - SQL server information not available" -ForegroundColor Yellow
+    }
     
     # Get current public IP for firewall rule
     Write-TimestampedHost "Getting current public IP address..." -ForegroundColor Cyan
@@ -542,15 +786,26 @@ try {
     Write-TimestampedHost ""
     Write-TimestampedHost "🔧 Next Steps:" -ForegroundColor Yellow
     if (Test-Path $appConfigPath) {
-        Write-TimestampedHost "1. Update environment variables with App Registration values from app-registration-config.json" -ForegroundColor White
-        Write-TimestampedHost "2. Create security groups and assign managed identities (if not done automatically)" -ForegroundColor White  
-        Write-TimestampedHost "3. Test the deployment" -ForegroundColor White
+        Write-TimestampedHost "1. Update environment variables using: .\deploy\Update-EnvironmentVariables.ps1" -ForegroundColor White
+        if ($deployAVD -or $deployLinuxVMs) {
+            Write-TimestampedHost "2. Configure deployed VMs with the Linux Broker agent" -ForegroundColor White
+            Write-TimestampedHost "3. Add VMs to the appropriate security groups" -ForegroundColor White
+            Write-TimestampedHost "4. Test the deployment" -ForegroundColor White
+        } else {
+            Write-TimestampedHost "2. Deploy VMs using VM configuration file if needed" -ForegroundColor White
+            Write-TimestampedHost "3. Test the deployment" -ForegroundColor White
+        }
     } else {
         Write-TimestampedHost "1. Run Setup-AppRegistrations.ps1 to create Azure AD apps" -ForegroundColor White
         Write-TimestampedHost "2. Re-run this deployment script to automatically configure Function App permissions" -ForegroundColor White
-        Write-TimestampedHost "3. Update environment variables with client IDs" -ForegroundColor White
-        Write-TimestampedHost "4. Create security groups and assign managed identities" -ForegroundColor White
-        Write-TimestampedHost "5. Test the deployment" -ForegroundColor White
+        Write-TimestampedHost "3. Update environment variables using: .\deploy\Update-EnvironmentVariables.ps1" -ForegroundColor White
+        if ($deployAVD -or $deployLinuxVMs) {
+            Write-TimestampedHost "4. Configure deployed VMs with the Linux Broker agent" -ForegroundColor White
+            Write-TimestampedHost "5. Test the deployment" -ForegroundColor White
+        } else {
+            Write-TimestampedHost "4. Deploy VMs using VM configuration file if needed" -ForegroundColor White
+            Write-TimestampedHost "5. Test the deployment" -ForegroundColor White
+        }
     }
 
 } catch {

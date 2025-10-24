@@ -205,9 +205,19 @@ We've streamlined the deployment process! Use these PowerShell scripts for a com
    .\deploy\Setup-AppRegistrations.ps1 -TenantId <your-tenant-id>
    ```
 
-3. **Deploy Everything** (Infrastructure + Permissions):
+3. **Deploy Infrastructure Only**:
    ```powershell
    .\deploy\Deploy-LinuxBroker.ps1 -SubscriptionId <subscription-id> -ResourceGroupName <resource-group> -Location <location>
+   ```
+
+4. **Deploy with VMs** (Optional - using configuration file):
+   ```powershell
+   # Copy and customize a configuration file
+   Copy-Item ".\vm-deployment-config.example.json" ".\my-vm-config.json"
+   # Edit my-vm-config.json with your settings
+   
+   # Deploy with VMs
+   .\deploy\Deploy-LinuxBroker.ps1 -SubscriptionId <subscription-id> -ResourceGroupName <resource-group> -Location <location> -VMConfigPath ".\my-vm-config.json"
    ```
 
 ### Key Features:
@@ -227,6 +237,51 @@ az deployment group create --resource-group <rg-name> --template-file bicep/main
 **Testing Deployment Readiness**:
 ```powershell
 .\deploy\Test-DeploymentReadiness.ps1 -SubscriptionId <sub-id> -ResourceGroupName <rg-name>
+```
+
+**Update Environment Variables** (after Setup-AppRegistrations.ps1):
+```powershell
+.\deploy\Update-EnvironmentVariables.ps1 -SubscriptionId <sub-id> -ResourceGroupName <rg-name>
+```
+
+### VM Configuration Options:
+
+The deployment script supports optional VM deployment using JSON configuration files:
+
+- **Core Infrastructure Only**: No configuration file needed
+- **With VMs**: Use `-VMConfigPath` parameter with a JSON configuration file
+
+**Configuration Examples**:
+- `vm-deployment-config.example.json` - Full example with both AVD and Linux VMs
+- `configs/linux-only-deployment.json` - Deploy only Linux VMs
+- `configs/avd-only-deployment.json` - Deploy only AVD hosts  
+- `configs/full-deployment.json` - Production example with both VM types
+
+**Configuration Structure**:
+```json
+{
+  "avd": {
+    "deploy": true/false,
+    "hostPoolName": "hp-name",
+    "sessionHostCount": 2,
+    "vmSize": "Standard_DS2_v2",
+    "adminUsername": "username",
+    "adminPassword": "password"
+  },
+  "linuxVMs": {
+    "deploy": true/false,
+    "vmCount": 3,
+    "vmSize": "Standard_D2s_v3", 
+    "osVersion": "24_04-lts",
+    "adminUsername": "username",
+    "adminPassword": "password"
+  },
+  "network": {
+    "vnetName": "existing-vnet",
+    "subnetName": "existing-subnet", 
+    "vnetResourceGroup": "network-rg"
+  }
+}
 ```
 
 ### What's New:

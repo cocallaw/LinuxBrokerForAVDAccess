@@ -1,0 +1,37 @@
+{
+  "avd": {
+    "deploy": false,
+    "resourceGroup": "avd-rg",
+    "hostPoolName": "hp-linuxbroker-prod",
+    "sessionHostCount": 1,
+    "vmSize": "Standard_DS2_v2",
+    "adminUsername": "avdadmin",
+    "adminPassword": "YourSecureAVDPassword123!"
+  },
+  "linuxVMs": {
+    "deploy": true,
+    "resourceGroup": "linux-rg",
+    "vmCount": 2,
+    "vmSize": "Standard_D2s_v3",
+    "osVersion": "24_04-lts",
+    "adminUsername": "linuxadmin",
+    "adminPassword": "YourSecureLinuxPassword123!"
+  },
+  "network": {
+    "avd": {
+      "vnetName": "prod-vnet",
+      "subnetName": "avd-subnet",
+      "vnetResourceGroup": "network-rg"
+    },
+    "linuxVMs": {
+      "vnetName": "prod-vnet",
+      "subnetName": "linux-subnet",
+      "vnetResourceGroup": "network-rg"
+    }
+  },
+  "tags": {
+    "Environment": "Production",
+    "Project": "LinuxBrokerForAVD",
+    "Owner": "Platform Team"
+  }
+}

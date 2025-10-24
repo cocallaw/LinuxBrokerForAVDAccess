@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2019-09/schema",
+  "description": "Configuration file for Linux Broker VM deployments",
+  
+  "avd": {
+    "deploy": true,
+    "resourceGroup": "your-avd-resource-group",
+    "hostPoolName": "hp-linuxbroker-dev",
+    "sessionHostCount": 2,
+    "vmSize": "Standard_DS2_v2",
+    "adminUsername": "avdadmin",
+    "adminPassword": "YourAVDPassword123!"
+  },
+  
+  "linuxVMs": {
+    "deploy": true,
+    "resourceGroup": "your-linux-resource-group",
+    "vmCount": 3,
+    "vmSize": "Standard_D2s_v3",
+    "osVersion": "24_04-lts",
+    "adminUsername": "linuxadmin", 
+    "adminPassword": "YourLinuxPassword123!"
+  },
+  
+  "network": {
+    "avd": {
+      "vnetName": "your-avd-vnet-name",
+      "subnetName": "your-avd-subnet-name",
+      "vnetResourceGroup": "your-avd-vnet-resource-group"
+    },
+    "linuxVMs": {
+      "vnetName": "your-linux-vnet-name",
+      "subnetName": "your-linux-subnet-name",
+      "vnetResourceGroup": "your-linux-vnet-resource-group"
+    }
+  },
+  
+  "tags": {
+    "Environment": "Development",
+    "Project": "LinuxBrokerForAVD",
+    "Owner": "Platform Team",
+    "CostCenter": "IT"
+  },
+  
+  "_comments": {
+    "avd.deploy": "Set to false to skip AVD deployment",
+    "avd.resourceGroup": "Resource group where AVD resources will be deployed (will be created if it doesn't exist)",
+    "linuxVMs.deploy": "Set to false to skip Linux VM deployment",
+    "linuxVMs.resourceGroup": "Resource group where Linux VMs will be deployed (will be created if it doesn't exist)", 
+    "linuxVMs.osVersion": "Options: '7-LVM', '8-LVM', '9-LVM', '24_04-lts'",
+    "vmSizes": "Use Azure VM sizes like 'Standard_D2s_v3', 'Standard_DS2_v2', etc.",
+    "network": "Must specify existing VNet, subnet, and resource group for VM deployments",
+    "passwords": "Use strong passwords - consider using Azure Key Vault references"
+  }
+}

@@ -129,6 +129,37 @@
 - **Dallas:** `Configure-AVD-Host.ps1` now requires `-LinuxBrokerApiClientId` parameter. Bicep custom script extension calls need updating to pass this value. Linux host custom script extensions now accept positional args (ORG_ID, ACTIVATION_KEY, API_CLIENT_ID, API_URL).
 - **Ash:** Should update Deploy-LinuxBroker.ps1 to call Deploy-Database.ps1 for the database deployment step.
 - **Lambert:** Can wire `/health` endpoint into App Service health check configuration in Bicep (frontend now provides this endpoint).
+- **Ripley recommendation (2026-02-25):** GitHub Actions deployment automation is highly feasible (80% automatable). Parker should proceed with building workflows using OIDC federated credentials + 4-workflow structure (app-registrations, infrastructure, vms, cleanup). Timeline: 2–3 weeks. Risk level: LOW. Start with OIDC setup in Azure Portal (~10 min), then build `deploy-infrastructure.yml` as core workflow.
+
+### GitHub Actions Deployment Strategy (2026-02-25)
+Ripley conducted feasibility analysis and recommends multi-workflow approach:
+1. **Fully automated:** Bicep infrastructure, database schema, app service config, post-deploy validation
+2. **Gated manual:** App Registration creation (MS Graph consent required)
+3. **Operator-triggered:** VM deployments, resource cleanup
+
+**Authentication:** Use OIDC federated credentials (no static secrets in GitHub; automatic token exchange; audit trail).
+
+**Secrets (9 total):**
+- AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID (OIDC)
+- LINUX_BROKER_API_CLIENT_ID, API_AUTH_SECRET, SQL_ADMIN_PASSWORD (configuration)
+- RHEL_ORG_ID, RHEL_ACTIVATION_KEY (RHEL VMs, optional)
+- AZURE_RESOURCE_GROUP (resource naming)
+
+**Workflow Files to Create:**
+1. `.github/workflows/deploy-app-registrations.yml` — Manual gated (Setup-AppRegistrations.ps1)
+2. `.github/workflows/deploy-infrastructure.yml` — Main workflow (Bicep + DB + config + validation)
+3. `.github/workflows/deploy-vms.yml` — Optional (VM deployment with operator input)
+4. `.github/workflows/cleanup.yml` — Manual (Cleanup-LinuxBroker.ps1)
+
+**Implementation Roadmap:**
+- Phase 1 (Week 1): OIDC federated identity in Azure Portal + app registration workflow
+- Phase 2 (Week 2): Infrastructure workflow (core) + post-deployment validation
+- Phase 3 (Week 2–3): VM and cleanup workflows + documentation
+- Phase 4 (Week 3): Security audit + README updates
+
+**Owner:** Parker (Infra/DevOps) to build workflows; Dallas (Backend) for configuration consultation.
+**Effort:** 2–3 weeks
+**Risk:** 🟢 LOW
 
 ### Bicep Template Updates for Parameterized Scripts (2025-07-25)
 - **AVD module:** Added `linuxBrokerApiClientId` parameter (mandatory) and updated custom script extension `commandToExecute` to pass both `-LinuxBrokerApiBaseUrl` and `-LinuxBrokerApiClientId` to `Configure-AVD-Host.ps1`.

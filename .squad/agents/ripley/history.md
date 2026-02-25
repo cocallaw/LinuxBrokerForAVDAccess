@@ -8,6 +8,29 @@
 
 ## Learnings
 
+### GitHub Actions Deployment Feasibility Analysis (2025-02-26)
+
+**Key Finding:** GitHub Actions deployment automation is **highly feasible** (~80% automatable). Three-tier approach:
+1. **Fully automated:** Bicep, Database schema, App Service/Functions configuration, post-deploy validation
+2. **Gated manual:** App Registration creation (requires MS Graph consent & client secret bootstrap)
+3. **Operator-triggered:** VM deployments (separate workflow), cleanup
+
+**Authentication:** OIDC federated credentials (recommended over service principal) — no stored secrets, automatic token exchange, audit trail.
+
+**Secrets Required:** 9 GitHub Secrets (AZURE_CLIENT_ID, TENANT_ID, SUBSCRIPTION_ID, API_CLIENT_ID, AUTH_SECRET, SQL_PASSWORD, etc.). One-time setup.
+
+**Workflow Structure:** 4 separate workflows (app-registrations, infrastructure, vms, cleanup) — better diagnostics and reusability.
+
+**Risks:** App Registration secret cannot be retrieved post-creation (accept as manual step); SQL password exposure mitigated by Azure AD auth; database order is critical but already handled by Deploy-Database.ps1.
+
+**Timeline:** 2–3 weeks for production-ready workflows + testing.
+
+**Owner:** Parker (Infra/DevOps) for workflow creation; Dallas (Backend) for configuration consultation.
+
+**Full analysis:** `.squad/decisions/inbox/ripley-gh-actions-deploy-analysis.md`
+
+---
+
 ### Deployment Architecture Review (2025-02-26)
 
 **Key Findings:**

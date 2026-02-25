@@ -110,6 +110,46 @@ _Team decisions are recorded here. Append-only._
 - `bicep/Linux/main.bicepparam` — example values for new params
 
 **Key Pattern:** Ubuntu scripts take 2 positional args (API_CLIENT_ID, API_URL) while RHEL scripts take 4 (ORG_ID, ACTIVATION_KEY, API_CLIENT_ID, API_URL). Order matters!
+
+### 2026-02-25: GitHub Actions Deployment Automation — Feasibility Analysis
+**By:** Ripley (Architecture Lead)
+**Status:** Analysis Complete
+
+**What**
+Conducted comprehensive feasibility analysis of automating Linux Broker deployment via GitHub Actions. Evaluated automation potential, authentication strategy, secrets management, workflow architecture, risk analysis, and implementation roadmap.
+
+**Findings**
+- **Automation Rate:** 80% automatable (Bicep, Database, App Service config, validation)
+- **Manual Steps:** App Registration creation + initial secret bootstrap (one-time setup, requires MS Graph consent)
+- **Recommended Approach:** OIDC federated credentials (no stored secrets) + 4 separate workflows
+- **Secrets Required:** 9 GitHub Secrets (AZURE_CLIENT_ID, TENANT_ID, SUBSCRIPTION_ID, API_CLIENT_ID, AUTH_SECRET, SQL_PASSWORD, RHEL_ORG_ID, RHEL_ACTIVATION_KEY, RESOURCE_GROUP)
+- **Workflow Structure:** 
+  1. `deploy-app-registrations.yml` — Manual gated trigger
+  2. `deploy-infrastructure.yml` — Automated Bicep + DB + config + validation
+  3. `deploy-vms.yml` — Optional manual VM deployment
+  4. `cleanup.yml` — Manual resource teardown
+- **Risk Level:** 🟢 LOW (proven patterns, mature tooling)
+- **Timeline:** 2–3 weeks for production-ready workflows
+
+**Why**
+Deployment currently requires manual orchestration of 8+ steps with unclear dependencies. Automation reduces human error, enables repeatable deployments, and provides audit trail. GitHub Actions is mature, widely adopted, and integrates natively with OIDC for secure secret-free authentication.
+
+**Impact**
+- **Parker:** Can now proceed with building GitHub Actions workflows using OIDC + 4-workflow structure. Recommend starting with OIDC federated identity setup in Azure Portal (~10 minutes).
+- **Dallas/Ash/Lambert:** Will need to provide final values for API_CLIENT_ID, Auth Secret, SQL password once app registrations created. Configuration workflow will be fully self-serve.
+- **All:** Deployment will be repeatable, auditable, and can be re-run without manual intervention (except app registration step).
+
+**Key Decisions**
+1. Use OIDC federated credentials (not service principal with static secret)
+2. Create 4 separate workflows (not monolithic single workflow)
+3. Keep App Registration as gated manual step (Graph API consent requirement)
+4. Implement post-deployment validation checks in core infrastructure workflow
+
+**Files Modified**
+- `.squad/decisions/inbox/ripley-gh-actions-deploy-analysis.md` — Detailed analysis (646 lines, 27,682 bytes) with YAML workflow templates, risk mitigations, and implementation roadmap
+
+**Full Analysis Location**
+`.squad/decisions/inbox/ripley-gh-actions-deploy-analysis.md`
 ### 2026-02-25: Deployment Documentation Structure
 **By:** Dallas (Backend Dev)
 **Status:** Implemented

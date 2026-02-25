@@ -77,3 +77,61 @@ _Team decisions are recorded here. Append-only._
 **Why:** Improves deployment reliability, supports re-runs without side effects, and gives operators immediate feedback on deployment health. Consolidates documentation to reduce confusion between the two deploy directories.
 
 **Impact:** Dallas/Ash/Lambert — if you reference deploy_infrastructure/ scripts in docs, note they are supplementary to deploy/. The main workflow is deploy/ only.
+### 2026-02-25: Bicep Templates Updated for Parameterized Script Extensions
+**By:** Parker (Infra/DevOps)
+**Status:** Implemented
+
+**What Changed**
+1. **AVD custom script extension** now passes `-LinuxBrokerApiClientId` alongside `-LinuxBrokerApiBaseUrl` to `Configure-AVD-Host.ps1`.
+2. **Linux custom script extensions** now pass positional arguments to all host configuration scripts:
+   - RHEL 7/8/9: `ORG_ID`, `ACTIVATION_KEY`, `API_CLIENT_ID`, `API_URL` (4 args)
+   - Ubuntu 24: `API_CLIENT_ID`, `API_URL` (2 args)
+3. **Frontend App Service** now has `healthCheckPath: '/health'` configured — Azure health probes will use Lambert's `/health` endpoint.
+4. **Python 3.11** runtime confirmed compatible with Flask 3.1.1 (no change needed).
+5. All new Bicep parameters have `@description` decorators and safe empty-string defaults for backward compatibility.
+
+**Why**
+- Dallas parameterized hardcoded placeholder values in custom script extensions — Bicep needed to pass those values through.
+- Lambert added a `/health` endpoint to the frontend — Bicep should configure Azure's built-in health monitoring to use it.
+- Without these Bicep changes, deployers would still need to manually edit scripts post-deployment.
+
+**Impact**
+- **Dallas:** AVD and Linux host scripts will now receive real configuration values from Bicep during deployment. No more manual editing of deployed scripts.
+- **Lambert:** Frontend health probes are now active — Azure will auto-restart unhealthy instances using `/health`.
+- **All:** Deployers need to provide `linuxBrokerApiClientId` when deploying AVD or Linux VMs. RHEL deployers also need `rhelOrgId` and `rhelActivationKey`.
+
+**Files Modified**
+- `bicep/main.bicep` — added `linuxBrokerApiClientId`, `rhelOrgId`, `rhelActivationKey` params
+- `bicep/main.bicepparam` — example values for new params
+- `bicep/infrastructure/main.bicep` — `healthCheckPath: '/health'` on frontend
+- `bicep/AVD/main.bicep` — `linuxBrokerApiClientId` param + updated commandToExecute
+- `bicep/AVD/main.bicepparam` — example value for API client ID
+- `bicep/Linux/main.bicep` — 4 new params + updated imageConfigs command strings
+- `bicep/Linux/main.bicepparam` — example values for new params
+
+**Key Pattern:** Ubuntu scripts take 2 positional args (API_CLIENT_ID, API_URL) while RHEL scripts take 4 (ORG_ID, ACTIVATION_KEY, API_CLIENT_ID, API_URL). Order matters!
+### 2026-02-25: Deployment Documentation Structure
+**By:** Dallas (Backend Dev)
+**Status:** Implemented
+
+**What**
+Created `DEPLOYMENT.md` as the canonical end-to-end deployment guide. Updated `README.md` to replace the verbose "Getting Started" section with a concise "Deployment" section linking to DEPLOYMENT.md.
+
+**Why**
+- Documentation was fragmented across README.md, CONFIGURATION.md, sql_queries/README.md, deploy/QUICKSTART.md, and deploy_infrastructure/README.md. No single guide walked a user through the complete process.
+- README.md had a "Getting Started" section that covered infrastructure but skipped database deployment, environment configuration, and post-deployment validation.
+- New team scripts (Test-DeploymentReadiness.ps1, Test-PostDeployment.ps1, Deploy-Database.ps1, Test-DeploymentHealth) weren't surfaced in the main documentation flow.
+- README.md referenced `DEPLOYMENT_IMPROVEMENTS.md` and `CONTRIBUTING.md` which didn't exist.
+
+**What Changed**
+1. **`DEPLOYMENT.md` (new):** 10-step deployment guide covering pre-flight checks → clone → prerequisites → app registrations → infrastructure → database → env vars → security groups → validation. Includes troubleshooting and a progress checklist.
+2. **`README.md` (updated):** "Getting Started" replaced with "Deployment" section — quick-start snippet + table linking to DEPLOYMENT.md, CONFIGURATION.md, sql_queries/README.md, and deploy/QUICKSTART.md. Fixed broken references to nonexistent files.
+
+**Impact**
+- **All agents:** DEPLOYMENT.md is the canonical "how to deploy" reference. If you add deployment steps, add them there.
+- **Parker:** deploy/ vs deploy_infrastructure/ distinction is documented in DEPLOYMENT.md.
+- **Kane:** Test-DeploymentReadiness.ps1 and Test-PostDeployment.ps1 are now prominently featured in Steps 0 and 9.
+- **Ash:** Deploy-Database.ps1 is Step 5 in the guide.
+- **Lambert:** Frontend env config is covered in Step 6d.
+
+**Key Pattern:** DEPLOYMENT.md follows the 7-phase configuration flow without duplicating CONFIGURATION.md content. All 17 referenced file paths verified to exist.

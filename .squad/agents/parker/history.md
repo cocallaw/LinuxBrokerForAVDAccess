@@ -129,3 +129,14 @@
 - **Dallas:** `Configure-AVD-Host.ps1` now requires `-LinuxBrokerApiClientId` parameter. Bicep custom script extension calls need updating to pass this value. Linux host custom script extensions now accept positional args (ORG_ID, ACTIVATION_KEY, API_CLIENT_ID, API_URL).
 - **Ash:** Should update Deploy-LinuxBroker.ps1 to call Deploy-Database.ps1 for the database deployment step.
 - **Lambert:** Can wire `/health` endpoint into App Service health check configuration in Bicep (frontend now provides this endpoint).
+
+### Bicep Template Updates for Parameterized Scripts (2025-07-25)
+- **AVD module:** Added `linuxBrokerApiClientId` parameter (mandatory) and updated custom script extension `commandToExecute` to pass both `-LinuxBrokerApiBaseUrl` and `-LinuxBrokerApiClientId` to `Configure-AVD-Host.ps1`.
+- **Linux module:** Added 4 new parameters: `rhelOrgId`, `rhelActivationKey`, `linuxBrokerApiClientId`, `linuxBrokerApiUrl`. Updated `imageConfigs` command strings to pass positional args to all RHEL (4 args) and Ubuntu (2 args) scripts.
+- **Infrastructure module:** Added `healthCheckPath: '/health'` to frontend App Service `siteConfig` — Azure will now probe Lambert's health endpoint.
+- **Main orchestrator:** Added `linuxBrokerApiClientId`, `rhelOrgId`, `rhelActivationKey` params and threaded them through to AVD and Linux sub-modules. Linux module also receives `linuxBrokerApiUrl` from infrastructure output.
+- **Python runtime:** Confirmed `PYTHON|3.11` in all App Service configs is compatible with Flask 3.1.1 (requires Python 3.9+). No change needed.
+- **All .bicepparam files updated** with example/placeholder values for new parameters. RHEL params are commented out by default since they're only needed for RHEL hosts.
+- **Validation:** All Bicep templates pass `az bicep build` validation.
+- **Backward compatibility:** All new params have safe defaults (empty strings). Scripts fall back to placeholder defaults if args are not provided, matching Dallas's implementation.
+- **Key pattern:** Ubuntu scripts take 2 positional args (API_CLIENT_ID, API_URL) while RHEL scripts take 4 (ORG_ID, ACTIVATION_KEY, API_CLIENT_ID, API_URL). The order matters!

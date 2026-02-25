@@ -46,6 +46,8 @@ param(
     [bool]$RestartServices = $true  # Set to $false to skip restarting App Services
 )
 
+$ErrorActionPreference = 'Stop'
+
 # Helper function to write timestamped messages
 function Write-TimestampedHost {
     param(

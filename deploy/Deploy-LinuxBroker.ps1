@@ -27,6 +27,8 @@ param(
     [string]$DeploymentName = "LinuxBroker-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
 )
 
+$ErrorActionPreference = 'Stop'
+
 # Helper function to write timestamped messages
 function Write-TimestampedHost {
     param(
@@ -177,6 +179,125 @@ function Set-FunctionAppPermissions {
             # Ignore disconnect errors
         }
     }
+}
+
+# Post-deployment validation function
+function Test-DeploymentHealth {
+    param(
+        [string]$ApiAppName,
+        [string]$FrontendAppName,
+        [string]$FunctionAppName,
+        [string]$ResourceGroupName
+    )
+
+    Write-TimestampedHost "🩺 Running post-deployment health checks..." -ForegroundColor Cyan
+    Write-TimestampedHost "" -ForegroundColor White
+
+    $results = @()
+
+    # Check 1: API endpoint responds
+    if ($ApiAppName) {
+        $apiUrl = "https://$($ApiAppName).azurewebsites.net"
+        try {
+            $response = Invoke-WebRequest -Uri $apiUrl -UseBasicParsing -TimeoutSec 30 -ErrorAction SilentlyContinue
+            if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 400) {
+                $results += [PSCustomObject]@{ Check = "API Endpoint"; Status = "✅ PASS"; Detail = "$apiUrl (HTTP $($response.StatusCode))" }
+            } else {
+                $results += [PSCustomObject]@{ Check = "API Endpoint"; Status = "⚠️  WARN"; Detail = "$apiUrl (HTTP $($response.StatusCode))" }
+            }
+        } catch {
+            $results += [PSCustomObject]@{ Check = "API Endpoint"; Status = "❌ FAIL"; Detail = "$apiUrl — $($_.Exception.Message)" }
+        }
+    } else {
+        $results += [PSCustomObject]@{ Check = "API Endpoint"; Status = "⏭️  SKIP"; Detail = "API app name not available" }
+    }
+
+    # Check 2: Frontend endpoint responds
+    if ($FrontendAppName) {
+        $frontendUrl = "https://$($FrontendAppName).azurewebsites.net"
+        try {
+            $response = Invoke-WebRequest -Uri $frontendUrl -UseBasicParsing -TimeoutSec 30 -ErrorAction SilentlyContinue
+            if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 400) {
+                $results += [PSCustomObject]@{ Check = "Frontend Endpoint"; Status = "✅ PASS"; Detail = "$frontendUrl (HTTP $($response.StatusCode))" }
+            } else {
+                $results += [PSCustomObject]@{ Check = "Frontend Endpoint"; Status = "⚠️  WARN"; Detail = "$frontendUrl (HTTP $($response.StatusCode))" }
+            }
+        } catch {
+            $results += [PSCustomObject]@{ Check = "Frontend Endpoint"; Status = "❌ FAIL"; Detail = "$frontendUrl — $($_.Exception.Message)" }
+        }
+    } else {
+        $results += [PSCustomObject]@{ Check = "Frontend Endpoint"; Status = "⏭️  SKIP"; Detail = "Frontend app name not available" }
+    }
+
+    # Check 3: Key Vault accessible
+    try {
+        $keyVaults = az keyvault list --resource-group $ResourceGroupName --query "[].name" -o tsv 2>$null
+        if ($keyVaults) {
+            $kvName = ($keyVaults -split "`n")[0].Trim()
+            $kvCheck = az keyvault show --name $kvName --query "properties.provisioningState" -o tsv 2>$null
+            if ($kvCheck -eq "Succeeded") {
+                $results += [PSCustomObject]@{ Check = "Key Vault"; Status = "✅ PASS"; Detail = "$kvName (provisioned)" }
+            } else {
+                $results += [PSCustomObject]@{ Check = "Key Vault"; Status = "⚠️  WARN"; Detail = "$kvName (state: $kvCheck)" }
+            }
+        } else {
+            $results += [PSCustomObject]@{ Check = "Key Vault"; Status = "❌ FAIL"; Detail = "No Key Vault found in $ResourceGroupName" }
+        }
+    } catch {
+        $results += [PSCustomObject]@{ Check = "Key Vault"; Status = "❌ FAIL"; Detail = "Could not query Key Vault: $($_.Exception.Message)" }
+    }
+
+    # Check 4: SQL Server accessible
+    try {
+        $sqlServers = az sql server list --resource-group $ResourceGroupName --query "[].{name:name, state:state}" -o json 2>$null | ConvertFrom-Json
+        if ($sqlServers -and $sqlServers.Count -gt 0) {
+            $sqlServer = $sqlServers[0]
+            if ($sqlServer.state -eq "Ready") {
+                $results += [PSCustomObject]@{ Check = "SQL Server"; Status = "✅ PASS"; Detail = "$($sqlServer.name) (Ready)" }
+            } else {
+                $results += [PSCustomObject]@{ Check = "SQL Server"; Status = "⚠️  WARN"; Detail = "$($sqlServer.name) (state: $($sqlServer.state))" }
+            }
+        } else {
+            $results += [PSCustomObject]@{ Check = "SQL Server"; Status = "❌ FAIL"; Detail = "No SQL Server found in $ResourceGroupName" }
+        }
+    } catch {
+        $results += [PSCustomObject]@{ Check = "SQL Server"; Status = "❌ FAIL"; Detail = "Could not query SQL Server: $($_.Exception.Message)" }
+    }
+
+    # Check 5: Function App running
+    if ($FunctionAppName) {
+        try {
+            $funcState = az functionapp show --name $FunctionAppName --resource-group $ResourceGroupName --query "state" -o tsv 2>$null
+            if ($funcState -eq "Running") {
+                $results += [PSCustomObject]@{ Check = "Function App"; Status = "✅ PASS"; Detail = "$FunctionAppName (Running)" }
+            } else {
+                $results += [PSCustomObject]@{ Check = "Function App"; Status = "⚠️  WARN"; Detail = "$FunctionAppName (state: $funcState)" }
+            }
+        } catch {
+            $results += [PSCustomObject]@{ Check = "Function App"; Status = "❌ FAIL"; Detail = "Could not query Function App: $($_.Exception.Message)" }
+        }
+    } else {
+        $results += [PSCustomObject]@{ Check = "Function App"; Status = "⏭️  SKIP"; Detail = "Function app name not available" }
+    }
+
+    # Print summary table
+    Write-TimestampedHost "" -ForegroundColor White
+    Write-TimestampedHost "╔══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
+    Write-TimestampedHost "║           Post-Deployment Health Check Results              ║" -ForegroundColor Cyan
+    Write-TimestampedHost "╠══════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
+    foreach ($result in $results) {
+        $line = "║  {0,-20} {1,-10} {2}" -f $result.Check, $result.Status, ""
+        Write-TimestampedHost $line -ForegroundColor White
+        Write-TimestampedHost "║    $($result.Detail)" -ForegroundColor Gray
+    }
+    Write-TimestampedHost "╚══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-TimestampedHost "" -ForegroundColor White
+
+    $failCount = ($results | Where-Object { $_.Status -like "*FAIL*" }).Count
+    $passCount = ($results | Where-Object { $_.Status -like "*PASS*" }).Count
+    Write-TimestampedHost "Results: $passCount passed, $failCount failed, $(($results | Where-Object { $_.Status -like "*WARN*" -or $_.Status -like "*SKIP*" }).Count) warnings/skipped" -ForegroundColor $(if ($failCount -eq 0) { "Green" } else { "Yellow" })
+
+    return $results
 }
 
 Write-TimestampedHost "🚀 Starting Linux Broker for AVD Access deployment..." -ForegroundColor Green
@@ -331,7 +452,21 @@ try {
 # Deploy main Bicep template
 Write-TimestampedHost "Deploying infrastructure..." -ForegroundColor Yellow
 
+# Check if a previous successful deployment exists (idempotency)
+$existingDeployment = $null
 try {
+    $existingDeployment = az deployment group show --resource-group $ResourceGroupName --name $DeploymentName --query "properties.provisioningState" -o tsv 2>$null
+} catch {
+    # No existing deployment found — proceed normally
+}
+if ($existingDeployment -eq "Succeeded") {
+    Write-TimestampedHost "✅ Deployment '$DeploymentName' already succeeded — skipping Bicep deployment" -ForegroundColor Green
+    Write-TimestampedHost "   To force re-deployment, use a different -DeploymentName" -ForegroundColor Cyan
+}
+
+try {
+    # Only run Bicep deployment if not already succeeded
+    if ($existingDeployment -ne "Succeeded") {
     # Build parameters array
     $bicepParameters = @(
         "projectName=$ProjectName"
@@ -463,6 +598,7 @@ try {
     }
 
     Write-TimestampedHost "✅ Deployment completed successfully" -ForegroundColor Green
+    } # end if ($existingDeployment -ne "Succeeded")
     
     # Now get deployment details in a separate call
     Write-TimestampedHost "Retrieving deployment details..." -ForegroundColor Cyan
@@ -547,14 +683,29 @@ try {
         $currentIp = (Invoke-RestMethod -Uri "https://ipinfo.io/ip" -TimeoutSec 10).Trim()
         Write-TimestampedHost "Current IP: $currentIp" -ForegroundColor White
         
-        # Add temporary firewall rule for current IP
-        Write-TimestampedHost "Adding temporary firewall rule..." -ForegroundColor Cyan
-        az sql server firewall-rule create `
-            --resource-group $ResourceGroupName `
-            --server $sqlServerName `
-            --name "TempDeploymentRule" `
-            --start-ip-address $currentIp `
-            --end-ip-address $currentIp
+        # Check if firewall rule already exists before creating
+        $existingRule = $null
+        try {
+            $existingRule = az sql server firewall-rule show --resource-group $ResourceGroupName --server $sqlServerName --name "TempDeploymentRule" --query "name" -o tsv 2>$null
+        } catch { }
+        
+        if ($existingRule) {
+            Write-TimestampedHost "✅ Temporary firewall rule already exists — updating IP" -ForegroundColor Green
+            az sql server firewall-rule update `
+                --resource-group $ResourceGroupName `
+                --server $sqlServerName `
+                --name "TempDeploymentRule" `
+                --start-ip-address $currentIp `
+                --end-ip-address $currentIp
+        } else {
+            Write-TimestampedHost "Adding temporary firewall rule..." -ForegroundColor Cyan
+            az sql server firewall-rule create `
+                --resource-group $ResourceGroupName `
+                --server $sqlServerName `
+                --name "TempDeploymentRule" `
+                --start-ip-address $currentIp `
+                --end-ip-address $currentIp
+        }
             
         if ($LASTEXITCODE -ne 0) {
             Write-Warning "Failed to add firewall rule. SQL scripts may fail."
@@ -847,13 +998,17 @@ try {
     }
     
     Write-TimestampedHost ""
-    Write-TimestampedHost "�📋 Deployment Summary:" -ForegroundColor Cyan
+    Write-TimestampedHost "📋 Deployment Summary:" -ForegroundColor Cyan
     Write-TimestampedHost "API URL: https://$($apiAppName).azurewebsites.net" -ForegroundColor White
     Write-TimestampedHost "Frontend URL: https://$($frontendAppName).azurewebsites.net" -ForegroundColor White
     Write-TimestampedHost "Function App: https://$($functionAppName).azurewebsites.net" -ForegroundColor White
     Write-TimestampedHost "SQL Server: $($sqlServerName).database.windows.net" -ForegroundColor White
     Write-TimestampedHost "Database: $databaseName" -ForegroundColor White
     Write-TimestampedHost ""
+
+    # Run post-deployment health checks
+    Test-DeploymentHealth -ApiAppName $apiAppName -FrontendAppName $frontendAppName -FunctionAppName $functionAppName -ResourceGroupName $ResourceGroupName
+
     Write-TimestampedHost "🔧 Next Steps:" -ForegroundColor Yellow
     if (Test-Path $appConfigPath) {
         Write-TimestampedHost "1. Update environment variables using: .\deploy\Update-EnvironmentVariables.ps1" -ForegroundColor White

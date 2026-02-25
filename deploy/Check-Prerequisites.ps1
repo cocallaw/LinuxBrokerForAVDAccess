@@ -9,6 +9,8 @@ param(
     [switch]$SkipPermissionCheck
 )
 
+$ErrorActionPreference = 'Stop'
+
 Write-Host "🔍 Checking deployment prerequisites for Linux Broker for AVD Access..." -ForegroundColor Green
 
 $errors = @()

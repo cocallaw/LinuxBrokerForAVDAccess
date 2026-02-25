@@ -1,5 +1,7 @@
 # Assign-AppRoleToFunctionApp.ps1
 # Assigns API app role to Function App's managed identity for authentication
+# ⚠️  DEPRECATED: This script is maintained for standalone use. The main Deploy-LinuxBroker.ps1
+#     script now handles permission assignment automatically. Use deploy/Deploy-LinuxBroker.ps1 instead.
 
 param(
     [Parameter(Mandatory=$false)]
@@ -20,6 +22,8 @@ param(
     [Parameter(Mandatory=$false)]
     [string]$AppRoleValue = "ScheduledTask"
 )
+
+$ErrorActionPreference = 'Stop'
 
 Write-Host "🔐 Assigning App Role to Function App Managed Identity..." -ForegroundColor Green
 

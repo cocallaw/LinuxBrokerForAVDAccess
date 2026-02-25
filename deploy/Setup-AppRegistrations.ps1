@@ -15,6 +15,8 @@ param(
     [string]$DeploymentId = ""
 )
 
+$ErrorActionPreference = 'Stop'
+
 Write-Host "🔐 Setting up Azure AD App Registrations..." -ForegroundColor Green
 
 # Generate deployment ID if not provided

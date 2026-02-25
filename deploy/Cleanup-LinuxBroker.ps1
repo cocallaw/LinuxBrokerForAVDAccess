@@ -15,6 +15,8 @@ param(
     [switch]$WhatIf
 )
 
+$ErrorActionPreference = 'Stop'
+
 Write-Host "🧹 Linux Broker Cleanup Script" -ForegroundColor Red
 Write-Host "==============================" -ForegroundColor Red
 

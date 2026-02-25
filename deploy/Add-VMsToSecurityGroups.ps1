@@ -18,6 +18,8 @@ param(
     [switch]$WhatIf
 )
 
+$ErrorActionPreference = 'Stop'
+
 # Helper function to write timestamped messages
 function Write-TimestampedHost {
     param(

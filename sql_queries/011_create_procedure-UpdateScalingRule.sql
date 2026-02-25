@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[UpdateScalingRule]
+CREATE OR ALTER PROCEDURE [dbo].[UpdateScalingRule]
     @RuleID INT,
     @MinVMs INT = NULL,
     @MaxVMs INT = NULL,

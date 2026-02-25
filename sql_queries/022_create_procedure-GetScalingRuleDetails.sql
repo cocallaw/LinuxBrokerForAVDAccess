@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[GetScalingRuleDetails]
+CREATE OR ALTER PROCEDURE [dbo].[GetScalingRuleDetails]
     @RuleID INT
 AS
 BEGIN

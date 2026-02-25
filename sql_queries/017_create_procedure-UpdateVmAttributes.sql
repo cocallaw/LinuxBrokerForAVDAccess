@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[UpdateVmAttributes]
+CREATE OR ALTER PROCEDURE [dbo].[UpdateVmAttributes]
     @VMID INT,
     @PowerState VARCHAR(10) = NULL,
     @NetworkStatus VARCHAR(16) = NULL,

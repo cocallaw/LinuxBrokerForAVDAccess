@@ -1,4 +1,4 @@
-CREATE PROCEDURE GetDeletedVirtualMachines
+CREATE OR ALTER PROCEDURE [dbo].[GetDeletedVirtualMachines]
 AS
 BEGIN
     -- Common table expression (CTE) to get the most recent entry per VMID

@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[GetScalingRules]
+CREATE OR ALTER PROCEDURE [dbo].[GetScalingRules]
 AS
 BEGIN
     SELECT RuleID, MinVMs, MaxVMs, ScaleUpRatio, ScaleUpIncrement, ScaleDownRatio, ScaleDownIncrement, LastChecked

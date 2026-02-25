@@ -1,4 +1,4 @@
-CREATE PROCEDURE GetVmHistory
+CREATE OR ALTER PROCEDURE [dbo].[GetVmHistory]
     @StartDate NVARCHAR(10) = NULL,  -- Changed to NVARCHAR for date string input
     @EndDate NVARCHAR(10) = NULL,    -- Changed to NVARCHAR for date string input
     @Limit INT = 100

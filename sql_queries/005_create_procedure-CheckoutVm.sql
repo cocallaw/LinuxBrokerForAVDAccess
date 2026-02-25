@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[CheckoutVm]
+CREATE OR ALTER PROCEDURE [dbo].[CheckoutVm]
     @Username NVARCHAR(255),
     @AvdHost NVARCHAR(255)
 AS

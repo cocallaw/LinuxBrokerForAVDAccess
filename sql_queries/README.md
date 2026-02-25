@@ -1,280 +1,149 @@
 ## Database Setup and SQL Procedures
 
-The `sql_queries` directory contains all the necessary SQL scripts to set up the Azure SQL Database for the Linux Broker for AVD Access solution. These scripts create the required tables and stored procedures that the Broker API and other components utilize to manage VMs, scaling rules, and activity logs.
+The `sql_queries` directory contains all SQL scripts to set up the Azure SQL Database for the Linux Broker for AVD Access solution. All scripts are **idempotent** — safe to run multiple times without errors.
 
-### Contents of `sql_queries`
+### Tables
 
-#### Table Creation Scripts
+| Table | Script | Description |
+|-------|--------|-------------|
+| **VmScalingRules** | `001_create_table-vm_scaling_rules.sql` | Scaling rules with temporal versioning (history table: `VmScalingRulesHistory`). Includes seed data. |
+| **VmScalingActivityLog** | `002_create_table-vm_scaling_activity_log.sql` | Audit log of scaling actions (scale up, scale down, no action). |
+| **VirtualMachines** | `003_create_table-virtual_machines.sql` | VM inventory with temporal versioning (history table: `VirtualMachinesHistory`). Tracks hostname, IP, power state, network status, VM status, user, and AVD host. |
+| **VmUsers** | `024_create_table-vmusers.sql` | User registry (uid, username) for VM access. |
 
-1. **Create Tables**:
-   - `001_create_table-vm_scaling_rules.sql`: Creates the `vm_scaling_rules` table to store scaling rules.
-   - `002_create_table-vm_scaling_activity_log.sql`: Creates the `vm_scaling_activity_log` table to log scaling activities.
-   - `003_create_table-virtual_machines.sql`: Creates the `virtual_machines` table to store information about Linux VMs.
+### Stored Procedures (19 total)
 
-#### Stored Procedure Scripts
+| Script | Procedure | Purpose |
+|--------|-----------|---------|
+| `005` | CheckoutVm | Checks out an available VM to a user/AVD host |
+| `006` | DeleteVm | Removes a VM record |
+| `007` | AddVm | Registers a new VM |
+| `008` | GetVmDetails | Retrieves details for a specific VM |
+| `009` | ReturnVm | Returns a VM to the available pool |
+| `010` | GetScalingRules | Lists all scaling rules |
+| `011` | UpdateScalingRule | Updates an existing scaling rule |
+| `012` | TriggerScalingLogic | Evaluates utilization and scales up/down |
+| `013` | GetScalingActivityLog | Queries scaling activity with date filters |
+| `014` | GetVms | Lists all VMs |
+| `015` | CreateScalingRule | Creates a new scaling rule |
+| `016` | ReleaseVm | Marks a VM as released (by hostname) |
+| `017` | UpdateVmAttributes | Updates power state, network, or VM status |
+| `018` | ReturnReleasedVms | Auto-returns VMs released >30 minutes |
+| `019` | DeleteScalingRule | Deletes a scaling rule |
+| `020` | GetVmHistory | Queries temporal history of VM changes |
+| `021` | GetVmScalingRulesHistory | Queries temporal history of scaling rules |
+| `022` | GetScalingRuleDetails | Gets details for a specific rule |
+| `023` | GetDeletedVirtualMachines | Finds VMs deleted from the main table |
 
-2. **Create Stored Procedures**:
-   - `005_create_procedure-CheckoutVm.sql`: Checks out a VM for a user.
-   - `006_create_procedure-DeleteVm.sql`: Deletes a VM record.
-   - `007_create_procedure-AddVm.sql`: Adds a new VM to the system.
-   - `008_create_procedure-GetVmDetails.sql`: Retrieves details of a specific VM.
-   - `009_create_procedure-ReturnVm.sql`: Returns a VM to the pool.
-   - `010_create_procedure-GetScalingRules.sql`: Retrieves current scaling rules.
-   - `011_create_procedure-UpdateScalingRule.sql`: Updates a scaling rule.
-   - `012_create_procedure-TriggerScalingLogic.sql`: Triggers scaling logic based on current metrics.
-   - `013_create_procedure-GetScalingActivityLog.sql`: Retrieves the scaling activity log.
-   - `014_create_procedure-GetVms.sql`: Retrieves a list of VMs.
-   - `015_create_procedure-CreateScalingRule.sql`: Creates a new scaling rule.
-   - `016_create_procedure-ReleaseVm.sql`: Releases a VM from a user.
-   - `017_create_procedure-UpdateVmAttributes.sql`: Updates attributes of a VM.
-   - `018_create_procedure-ReturnReleasedVms.sql`: Returns VMs that were released.
-   - `019_create_procedure-DeleteScalingRule.sql`: Deletes a scaling rule.
-   - `020_create_procedure-GetVmHistory.sql`: Retrieves the history of VM status changes.
-   - `021_create_procedure-GetVmScalingRulesHistory.sql`: Retrieves the history of scaling rule changes.
-   - `022_create_procedure-GetScalingRuleDetails.sql`: Retrieves details of a specific scaling rule.
-   - `023_create_procedure-GetDeletedVirtualMachines.sql`: Retrieves records of deleted VMs.
+### Performance Indexes
+
+Script `025_add_indexes.sql` creates non-clustered indexes on frequently queried columns:
+
+- **VirtualMachines**: `VmStatus`, `Username`, `Hostname`, `AvdHost`
+- **VmScalingActivityLog**: `CheckTimestamp` (descending)
 
 ### Prerequisites
 
-- **Azure SQL Database Instance**: Ensure you have an Azure SQL Database instance set up.
-- **SQL Client Tool**: Use tools like Azure Data Studio, SQL Server Management Studio (SSMS), or SQLCMD.
-- **Permissions**: You need sufficient permissions to create tables, stored procedures, and manage users in the database.
+- **Azure SQL Database** — an existing instance (any tier)
+- **SQL Client** — `sqlcmd`, Azure Data Studio, or SSMS
+- **Permissions** — ability to create tables, procedures, and indexes
+- **Network** — firewall rule allowing your client IP to reach the Azure SQL server
 
-### Deployment Steps
+### Automated Deployment (Recommended)
 
-Follow these steps to set up the database:
-
-#### 1. Connect to Azure SQL Database
-
-- Open your SQL client tool.
-- Connect to your Azure SQL Database instance using administrator credentials.
-
-#### 2. Create Tables
-
-Run the table creation scripts in the following order:
-
-**a. Create `vm_scaling_rules` Table**
-
-```sql
--- Run 001_create_table-vm_scaling_rules.sql
-```
-
-**b. Create `vm_scaling_activity_log` Table**
-
-```sql
--- Run 002_create_table-vm_scaling_activity_log.sql
-```
-
-**c. Create `virtual_machines` Table**
-
-```sql
--- Run 003_create_table-virtual_machines.sql
-```
-
-#### 3. Deploy Stored Procedures
-
-Run each stored procedure script sequentially:
-
-**a. Checkout VM Procedure**
-
-```sql
--- Run 005_create_procedure-CheckoutVm.sql
-```
-
-**b. Delete VM Procedure**
-
-```sql
--- Run 006_create_procedure-DeleteVm.sql
-```
-
-**c. Add VM Procedure**
-
-```sql
--- Run 007_create_procedure-AddVm.sql
-```
-
-**d. Get VM Details Procedure**
-
-```sql
--- Run 008_create_procedure-GetVmDetails.sql
-```
-
-**e. Return VM Procedure**
-
-```sql
--- Run 009_create_procedure-ReturnVm.sql
-```
-
-**f. Get Scaling Rules Procedure**
-
-```sql
--- Run 010_create_procedure-GetScalingRules.sql
-```
-
-**g. Update Scaling Rule Procedure**
-
-```sql
--- Run 011_create_procedure-UpdateScalingRule.sql
-```
-
-**h. Trigger Scaling Logic Procedure**
-
-```sql
--- Run 012_create_procedure-TriggerScalingLogic.sql
-```
-
-**i. Get Scaling Activity Log Procedure**
-
-```sql
--- Run 013_create_procedure-GetScalingActivityLog.sql
-```
-
-**j. Get VMs Procedure**
-
-```sql
--- Run 014_create_procedure-GetVms.sql
-```
-
-**k. Create Scaling Rule Procedure**
-
-```sql
--- Run 015_create_procedure-CreateScalingRule.sql
-```
-
-**l. Release VM Procedure**
-
-```sql
--- Run 016_create_procedure-ReleaseVm.sql
-```
-
-**m. Update VM Attributes Procedure**
-
-```sql
--- Run 017_create_procedure-UpdateVmAttributes.sql
-```
-
-**n. Return Released VMs Procedure**
-
-```sql
--- Run 018_create_procedure-ReturnReleasedVms.sql
-```
-
-**o. Delete Scaling Rule Procedure**
-
-```sql
--- Run 019_create_procedure-DeleteScalingRule.sql
-```
-
-**p. Get VM History Procedure**
-
-```sql
--- Run 020_create_procedure-GetVmHistory.sql
-```
-
-**q. Get VM Scaling Rules History Procedure**
-
-```sql
--- Run 021_create_procedure-GetVmScalingRulesHistory.sql
-```
-
-**r. Get Scaling Rule Details Procedure**
-
-```sql
--- Run 022_create_procedure-GetScalingRuleDetails.sql
-```
-
-**s. Get Deleted Virtual Machines Procedure**
-
-```sql
--- Run 023_create_procedure-GetDeletedVirtualMachines.sql
-```
-
-#### 4. Verify Deployment
-
-After running all scripts:
-
-- **Check Tables**:
-
-  ```sql
-  SELECT name FROM sys.tables;
-  ```
-
-  Ensure `vm_scaling_rules`, `vm_scaling_activity_log`, and `virtual_machines` tables are listed.
-
-- **Check Stored Procedures**:
-
-  ```sql
-  SELECT name FROM sys.procedures;
-  ```
-
-  Verify that all stored procedures are present.
-
-#### 5. Grant Permissions (If Necessary)
-
-Ensure that the managed identities and users have the appropriate permissions to execute the stored procedures:
-
-- **Grant Execute Permission**:
-
-  ```sql
-  GRANT EXECUTE ON [schema].[procedure_name] TO [user_or_role];
-  ```
-
-### Notes and Best Practices
-
-- **Run Scripts Sequentially**: The order of execution is crucial due to dependencies between tables and stored procedures.
-- **Backup Database**: If you're deploying to an existing database, consider taking a backup before making changes.
-- **Use Transaction Blocks**: For critical deployments, wrap your scripts in transactions to ensure atomicity.
-- **Error Handling**: Check for errors after running each script and resolve any issues before proceeding.
-- **Security**: Ensure that connection strings and credentials are secured. Use Azure Key Vault where applicable.
-
-### Example Deployment Using SQLCMD
-
-If you prefer to run scripts from the command line using `sqlcmd`, here's how you can do it:
-
-```bash
-sqlcmd -S your_server.database.windows.net -U your_username -P your_password -d your_database -i "sql_queries/001_create_table-vm_scaling_rules.sql"
-
-sqlcmd -S your_server.database.windows.net -U your_username -P your_password -d your_database -i "sql_queries/002_create_table-vm_scaling_activity_log.sql"
-
--- Continue running all scripts in order
-```
-
-Replace `your_server`, `your_username`, `your_password`, and `your_database` with your actual database connection details.
-
-### Automating Deployment with a Script
-
-You can create a deployment script to automate running all SQL files in the correct order. Here's an example using a PowerShell script:
+Use the included PowerShell script to deploy all scripts in the correct order:
 
 ```powershell
-$server = "your_server.database.windows.net"
-$username = "your_username"
-$password = "your_password"
-$database = "your_database"
-$sqlFiles = Get-ChildItem -Path "sql_queries" -Filter "*.sql" | Sort-Object Name
+# SQL Authentication
+.\Deploy-Database.ps1 -ServerName "myserver.database.windows.net" `
+                      -DatabaseName "linuxbroker" `
+                      -Username "sqladmin" `
+                      -Password "YourPassword"
 
-foreach ($file in $sqlFiles) {
-    Write-Host "Executing $($file.Name)..."
-    sqlcmd -S $server -U $username -P $password -d $database -i $file.FullName
-}
+# Azure AD Authentication
+.\Deploy-Database.ps1 -ServerName "myserver.database.windows.net" `
+                      -DatabaseName "linuxbroker" `
+                      -UseAzureAD
+```
+
+The script will:
+1. Test database connectivity before deploying
+2. Execute all scripts in dependency order
+3. Print per-script pass/fail status
+4. Report a summary with total succeeded/failed count
+
+### Manual Deployment
+
+If deploying manually, execute scripts in this exact order:
+
+#### Step 1 — Tables
+
+```bash
+sqlcmd -S <server> -d <database> -U <user> -P <pass> -i 001_create_table-vm_scaling_rules.sql
+sqlcmd -S <server> -d <database> -U <user> -P <pass> -i 002_create_table-vm_scaling_activity_log.sql
+sqlcmd -S <server> -d <database> -U <user> -P <pass> -i 003_create_table-virtual_machines.sql
+sqlcmd -S <server> -d <database> -U <user> -P <pass> -i 024_create_table-vmusers.sql
+```
+
+#### Step 2 — Stored Procedures
+
+```bash
+# Run scripts 005 through 023 in numeric order
+sqlcmd -S <server> -d <database> -U <user> -P <pass> -i 005_create_procedure-CheckoutVm.sql
+# ... continue through 023
+```
+
+#### Step 3 — Performance Indexes
+
+```bash
+sqlcmd -S <server> -d <database> -U <user> -P <pass> -i 025_add_indexes.sql
+```
+
+### Post-Deployment Verification
+
+```sql
+-- Verify tables
+SELECT name FROM sys.tables
+WHERE name IN ('VmScalingRules', 'VmScalingActivityLog', 'VirtualMachines', 'VmUsers');
+
+-- Verify procedures (expect 19)
+SELECT COUNT(*) AS ProcedureCount FROM sys.procedures;
+
+-- Verify indexes
+SELECT i.name, t.name AS TableName
+FROM sys.indexes i JOIN sys.tables t ON i.object_id = t.object_id
+WHERE i.name LIKE 'IX_%';
+
+-- Verify seed data
+SELECT COUNT(*) AS ScalingRuleCount FROM VmScalingRules;
+```
+
+You can also run `deploy_database.sql` in your SQL client — it contains all verification queries.
+
+### Idempotency
+
+All scripts are designed for safe re-execution:
+
+- **Tables**: Wrapped with `IF OBJECT_ID(...) IS NULL` — skips creation if the table already exists
+- **Stored Procedures**: Use `CREATE OR ALTER PROCEDURE` — creates or updates in place
+- **Indexes**: Check `sys.indexes` before creating — skips if the index exists
+- **Seed Data**: Only inserts if the table is empty
+
+### Granting Permissions
+
+After deployment, grant execute permissions to application identities:
+
+```sql
+-- For managed identity or SQL user
+GRANT EXECUTE ON SCHEMA::dbo TO [your-app-identity];
 ```
 
 ### Troubleshooting
 
-- **Common Errors**:
-
-  - *Permission Denied*: Ensure your user has the necessary permissions.
-  - *Syntax Errors*: Check the SQL script for typos or syntax issues.
-  - *Missing Objects*: Verify that dependent tables or procedures exist before running a script.
-
-- **Logging**:
-
-  - Enable logging in your SQL client to capture detailed error messages.
-  - Review Azure SQL Database logs for any server-side issues.
-
-### Updating the Database
-
-If you need to update existing stored procedures or tables:
-
-- **Modify the Script**: Update the SQL script with the necessary changes.
-- **Run ALTER Commands**: Use `ALTER PROCEDURE` or `ALTER TABLE` instead of `CREATE`.
-- **Version Control**: Keep your SQL scripts under version control to track changes.
+| Issue | Resolution |
+|-------|------------|
+| Connection refused | Add your client IP to the Azure SQL firewall rules |
+| Permission denied | Ensure your user has `db_ddladmin` and `db_datawriter` roles |
+| Table already exists (old scripts) | Update to the latest idempotent scripts from this directory |
+| `sqlcmd` not found | Install via `apt install mssql-tools` (Linux) or download from Microsoft |
+| Temporal table errors | Temporal tables require Azure SQL or SQL Server 2016+. Not supported on SQL Express |

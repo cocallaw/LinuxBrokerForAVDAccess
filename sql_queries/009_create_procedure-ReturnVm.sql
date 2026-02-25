@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[ReturnVm]
+CREATE OR ALTER PROCEDURE [dbo].[ReturnVm]
     @VMID INT
 AS
 BEGIN

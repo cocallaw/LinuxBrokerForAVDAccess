@@ -1,4 +1,4 @@
-CREATE PROCEDURE GetVmScalingRulesHistory
+CREATE OR ALTER PROCEDURE [dbo].[GetVmScalingRulesHistory]
     @StartDate DATETIME2 = NULL,
     @EndDate DATETIME2 = NULL,
     @Limit INT = 100

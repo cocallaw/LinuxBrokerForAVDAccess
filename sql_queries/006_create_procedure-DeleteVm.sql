@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[DeleteVm]
+CREATE OR ALTER PROCEDURE [dbo].[DeleteVm]
     @VMID INT
 AS
 BEGIN

@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[AddVm]
+CREATE OR ALTER PROCEDURE [dbo].[AddVm]
     @Hostname NVARCHAR(255),
     @IPAddress NVARCHAR(50),
     @PowerState VARCHAR(10),

@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[CreateScalingRule]
+CREATE OR ALTER PROCEDURE [dbo].[CreateScalingRule]
     @MinVMs INT,
     @MaxVMs INT,
     @ScaleUpRatio FLOAT,

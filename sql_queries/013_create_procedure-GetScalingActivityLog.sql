@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[GetScalingActivityLog]
+CREATE OR ALTER PROCEDURE [dbo].[GetScalingActivityLog]
     @StartDate DATETIME = NULL,  -- Optional filter by start date
     @EndDate DATETIME = NULL,    -- Optional filter by end date
     @Limit INT = NULL            -- Optional limit on the number of records to retrieve

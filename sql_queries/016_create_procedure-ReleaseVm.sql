@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[ReleaseVm]
+CREATE OR ALTER PROCEDURE [dbo].[ReleaseVm]
     @Hostname VARCHAR(255)
 AS
 BEGIN

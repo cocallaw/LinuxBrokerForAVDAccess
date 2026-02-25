@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[ReturnReleasedVms]
+CREATE OR ALTER PROCEDURE [dbo].[ReturnReleasedVms]
 AS
 BEGIN
     DECLARE @CurrentTime DATETIME = GETDATE();

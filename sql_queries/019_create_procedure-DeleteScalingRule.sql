@@ -1,4 +1,4 @@
-CREATE PROCEDURE DeleteScalingRule
+CREATE OR ALTER PROCEDURE [dbo].[DeleteScalingRule]
     @RuleID INT
 AS
 BEGIN

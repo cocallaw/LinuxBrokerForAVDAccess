@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[TriggerScalingLogic]
+CREATE OR ALTER PROCEDURE [dbo].[TriggerScalingLogic]
 AS
 BEGIN
     -- Declare variables to hold the scaling rules

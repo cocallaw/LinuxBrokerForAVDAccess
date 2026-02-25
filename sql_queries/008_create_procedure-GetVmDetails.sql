@@ -1,4 +1,4 @@
-CREATE PROCEDURE [dbo].[GetVmDetails]
+CREATE OR ALTER PROCEDURE [dbo].[GetVmDetails]
     @VMID INT
 AS
 BEGIN

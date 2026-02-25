@@ -116,3 +116,16 @@
 5. Create post-deployment validation script (Parker + Ripley)
 6. Add ErrorActionPreference to all PowerShell (Parker owned)
 7. Refactor monolithic Deploy-LinuxBroker.ps1 (Parker + Ripley)
+
+### Deployment Improvements Implemented (2026-02-25)
+- **ErrorActionPreference:** Added `$ErrorActionPreference = 'Stop'` to all 7 PowerShell scripts (6 in deploy/, 1 in deploy_infrastructure/). Must go after `param()` block in PowerShell.
+- **Idempotency:** Deploy-LinuxBroker.ps1 now checks for existing successful deployments before running Bicep, and checks for existing SQL firewall rules before creating them. Existing deployment is skipped with a message; user can force re-deploy with a different `-DeploymentName`.
+- **Post-deployment validation:** Added `Test-DeploymentHealth` function to Deploy-LinuxBroker.ps1 that checks API endpoint (HTTP), frontend endpoint, Key Vault provisioning state, SQL Server readiness, and Function App state. Prints a bordered summary table with pass/fail/warn/skip status.
+- **Deploy directory consolidation:** Added `deploy_infrastructure/README.md` explaining the relationship to `deploy/`. Added deprecation notice to `Assign-AppRoleToFunctionApp.ps1` header noting that `Deploy-LinuxBroker.ps1` now handles this automatically.
+- **Key pattern:** `$ErrorActionPreference = 'Stop'` must be placed AFTER `param()` block — PowerShell requires `param()` as the first executable statement.
+- **User preference:** No local dev setup or Docker containers — skip those improvements.
+
+### Cross-Agent Updates (2026-02-25)
+- **Dallas:** `Configure-AVD-Host.ps1` now requires `-LinuxBrokerApiClientId` parameter. Bicep custom script extension calls need updating to pass this value. Linux host custom script extensions now accept positional args (ORG_ID, ACTIVATION_KEY, API_CLIENT_ID, API_URL).
+- **Ash:** Should update Deploy-LinuxBroker.ps1 to call Deploy-Database.ps1 for the database deployment step.
+- **Lambert:** Can wire `/health` endpoint into App Service health check configuration in Bicep (frontend now provides this endpoint).

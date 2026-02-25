@@ -103,3 +103,39 @@
 2. **With Ash:** Coordinate on idempotency changes to SQL scripts for pymssql compatibility
 3. **With Lambert:** Coordinated .env.template and validation across API/Frontend
 4. **Team:** Create deployment validation script that checks all backend components
+
+### Deployment Improvements Implemented (2026-02-25)
+
+**1. `.env.template` created at repo root**
+- Documents all environment variables across API (17 vars), Functions (2 vars), Broker Agent, and Session Release Agent
+- Grouped by component with descriptions, example values, and deployment order notes
+- Comments explain each variable's purpose and where it comes from
+
+**2. API startup validation in `api/config.py`**
+- `validate_environment()` function checks all 16 required env vars at import time
+- Missing vars produce a clear error listing each one by name + description
+- Exits with sys.exit(1) instead of letting the app crash later with cryptic DB/auth errors
+- NFS_SHARE intentionally excluded from required list (optional feature)
+
+**3. Parameterized hardcoded values across scripts**
+- `Connect-LinuxBroker.ps1`: Added `-ApiBaseUrl` and `-ApiClientId` parameters; placeholders now have deployment comments
+- `Configure-AVD-Host.ps1`: Added `-LinuxBrokerApiClientId` parameter; now injects both URL and Client ID
+- `Configure-RHEL7-Host.sh`, `Configure-RHEL8-Host.sh`, `Configure-RHEL9-Host.sh`: ORG_ID, ACTIVATION_KEY, API_CLIENT_ID, API_URL now accept positional args with fallback defaults
+- `Configure-Ubuntu24_desktop-Host.sh`: API_CLIENT_ID and API_URL accept positional args
+
+**4. `CONFIGURATION.md` created at repo root**
+- Maps the complete 7-phase configuration flow with dependency arrows
+- Documents every variable, where it comes from, and which component uses it
+- Includes troubleshooting section for common deployment issues
+- Cross-references .env.template, env.example, local.settings.json-example
+
+**Key Patterns:**
+- Placeholders in scripts use the pattern `<-- REQUIRED:` comments for deployer visibility
+- `${N:-default}` pattern in bash scripts allows positional arg override while keeping backward compatibility
+- PowerShell scripts use optional parameters with empty string defaults for same backward compatibility
+- API validation runs at import time via `config.py` — no changes to `app.py` needed
+
+### Cross-Agent Updates (2026-02-25)
+- **Parker:** Bicep custom script extensions need to pass new `-LinuxBrokerApiClientId` parameter to Configure-AVD-Host.ps1. Linux host extensions now accept positional args instead of relying on hardcoded defaults.
+- **Ash:** Coordinate on idempotency changes to SQL scripts for pymssql compatibility. Procedures now use `CREATE OR ALTER` (no behavioral change to pymssql callers).
+- **Lambert:** `.env.template` now covers the full stack including frontend vars. All components reference this single file for env var documentation.

@@ -76,3 +76,33 @@
 2. **With Dallas:** Coordinate on idempotency changes for pymssql compatibility
 3. **Team:** Create deployment validation script that verifies database schema exists and is current version
 4. **Sequencing:** Database must initialize before API can start (deployment order critical)
+
+### Deployment Improvements Implemented (Feb 2025)
+
+1. **Idempotency**: All 24 SQL scripts are now safe to re-run:
+   - 4 table scripts use `IF OBJECT_ID(...) IS NULL` guards
+   - 19 stored procedures use `CREATE OR ALTER PROCEDURE` (Azure SQL native)
+   - Removed hardcoded `USE linuxbroker;` — database context set by connection
+   - Seed data in 001 only inserts if table is empty, with verification query
+
+2. **Performance Indexes** (`025_add_indexes.sql`):
+   - VirtualMachines: VmStatus (+ includes), Username (+ includes), Hostname, AvdHost
+   - VmScalingActivityLog: CheckTimestamp DESC (+ includes)
+   - All wrapped with `IF NOT EXISTS` on `sys.indexes`
+
+3. **Deployment Automation**:
+   - `Deploy-Database.ps1` — PowerShell wrapper executing all scripts in dependency order with connectivity test, per-script status, summary report, and error halting
+   - `deploy_database.sql` — master reference documenting execution order + post-deployment verification queries
+   - Supports SQL Auth and Azure AD auth
+
+4. **README.md** rewritten: documents all 4 tables (including VmUsers), 19 procedures, index script, automated and manual deployment, verification queries, idempotency explanation, troubleshooting table
+
+5. **Key Patterns**:
+   - Azure SQL supports `CREATE OR ALTER PROCEDURE` natively — no need for DROP/CREATE or IF EXISTS wrappers
+   - Azure SQL does NOT support `:r` (SQLCMD file includes) — must use external orchestration (PowerShell)
+   - `$ErrorActionPreference = "Stop"` is critical in deployment scripts
+
+### Cross-Agent Updates (2026-02-25)
+- **Parker:** Should update Deploy-LinuxBroker.ps1 to call Deploy-Database.ps1 for the database deployment step. Database must initialize before API can start.
+- **Dallas:** Procedures now use `CREATE OR ALTER PROCEDURE` (no behavioral change to pymssql callers). Coordinate on idempotency changes for compatibility.
+- **All:** Database deployment now fully automated with verification queries. Team should monitor first production deployment for schema migration success.

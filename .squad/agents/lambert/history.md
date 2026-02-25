@@ -163,3 +163,19 @@
 2. **With Parker:** Redis migration for session storage (managed by Parker's Bicep)
 3. **Team:** Create deployment validation script to verify config before first login
 4. **Dependencies:** Flask and requests upgrades needed (security CVEs)
+
+### Deployment Improvements (Implemented)
+1. **Dependencies Updated:** Flask 2.2.2→3.1.1, Werkzeug pinned→>=3.1.0, requests 2.26.0→2.32.3. Dry-run verified all resolve cleanly with existing deps (msal, Flask-Session, pyjwt, cryptography).
+2. **Environment Validation:** app.py now validates 6 required env vars at startup and exits with clear error listing missing vars. Validation runs before Flask app is created.
+3. **`.env.template` Created:** Comprehensive template with descriptions, example GUID formats, and generation tips (e.g. `python3 -c "import secrets; print(secrets.token_hex(32))"`). Also fixed "Linbux" typo in env.example.
+4. **Health Check Endpoint:** `/health` returns JSON with status, version, and api_reachable flag (pings API's /health with 5s timeout). Unauthenticated — suitable for Azure App Service health probes and post-deployment validation.
+5. **Key Design Decisions:**
+   - Flask 3.x chosen over staying on 2.x: app only uses stable APIs (routes, templates, session, flash) — no deprecated features in use. Verified compatibility with `ast.parse` and dry-run pip install.
+   - Health endpoint deliberately unauthenticated to allow Azure health probes and monitoring tools.
+   - `requests` imported as `req_lib` in app.py to avoid shadowing the `requests` module already imported in route files.
+   - Env validation happens at module load (before `app = Flask(...)`) so gunicorn workers fail fast with clear messaging.
+
+### Cross-Agent Updates (2026-02-25)
+- **Parker:** Can wire `/health` endpoint into App Service health check configuration in Bicep. Frontend provides JSON response with api_reachable status for monitoring.
+- **Dallas:** Portal now pings `{API_URL}/health` endpoint. Consider adding `/health` endpoint to the API if one doesn't exist. `.env.template` now serves as canonical list of all frontend env vars.
+- **All:** Dependency updates completed — no local dev Docker setup required per user preference.

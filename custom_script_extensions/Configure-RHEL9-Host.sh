@@ -3,7 +3,7 @@
 # Installs and configures the necessary packages for Linux Broker for AVD Access on RHEL 9
 
 # ===============================
-# Variables
+# Variables — DEPLOYMENT: Set these before running the script
 
 epel_url="https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm"
 xpra_repo_path="/etc/yum.repos.d/xpra.repo"
@@ -15,9 +15,10 @@ xrdp_who_xnc_url="https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDA
 arch=$( /bin/arch )
 remoteAccessTool="both"  # Options: "xrdp", "xpra", or "both"
 
+# RHEL Subscription Manager — set register="false" if already registered
 register="true"
-orgId="ORG_ID"
-activationKey="ACTIVATION_KEY"
+orgId="${1:-ORG_ID}"                    # <-- REQUIRED: Pass as 1st arg or replace with your RHEL Org ID
+activationKey="${2:-ACTIVATION_KEY}"    # <-- REQUIRED: Pass as 2nd arg or replace with your activation key
 
 output_directory="/usr/local/bin"
 
@@ -28,8 +29,8 @@ CURRENT_USERS_DETAILS="$output_directory/xrdp-loggedin-users.txt"
 
 CRON_SCHEDULE="0 * * * *"
 
-YOUR_LINUXBROKER_API_CLIENT_ID="my_actual_client_id"
-YOUR_LINUXBROKER_API_URL="my.actual.linuxbroker.api.url"
+YOUR_LINUXBROKER_API_CLIENT_ID="${3:-my_actual_client_id}"   # <-- REQUIRED: Pass as 3rd arg or replace with API Client ID
+YOUR_LINUXBROKER_API_URL="${4:-my.actual.linuxbroker.api.url}" # <-- REQUIRED: Pass as 4th arg or replace with API URL
 
 # ===============================
 # Execution

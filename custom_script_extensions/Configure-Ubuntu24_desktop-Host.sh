@@ -3,7 +3,7 @@
 # Installs and configures the necessary packages for Linux Broker for AVD Access on Ubuntu 24 desktop
 
 # ===============================
-# Variables
+# Variables — DEPLOYMENT: Set these before running the script
 
 release_session_url="https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDAccess/main/linux_host/session_release_buffer/Ubuntu/release-session.sh"
 xrdp_who_xnc_url="https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDAccess/main/linux_host/session_release_buffer/xrdp-who-xnc.sh"
@@ -20,8 +20,8 @@ CURRENT_USERS_DETAILS="$output_directory/xrdp-loggedin-users.txt"
 
 CRON_SCHEDULE="0 * * * *" 
 
-YOUR_LINUXBROKER_API_CLIENT_ID="my_actual_client_id"
-YOUR_LINUXBROKER_API_URL="my.actual.linuxbroker.api.url"
+YOUR_LINUXBROKER_API_CLIENT_ID="${1:-my_actual_client_id}"   # <-- REQUIRED: Pass as 1st arg or replace with API Client ID
+YOUR_LINUXBROKER_API_URL="${2:-my.actual.linuxbroker.api.url}" # <-- REQUIRED: Pass as 2nd arg or replace with API URL
 
 # ===============================
 # Execution

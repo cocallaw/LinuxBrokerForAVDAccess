@@ -3,7 +3,7 @@
 # Installs and configures the necessary packages for Linux Broker for AVD Access on RHEL 8
 
 # ===============================
-# Variables
+# Variables — DEPLOYMENT: Set these before running the script
 
 # Default definition for the main project
 GH_OWNER="microsoft"
@@ -36,9 +36,10 @@ xrdp_ini="/etc/xrdp/xrdp.ini"
 arch=$( /bin/arch )
 remoteAccessTool="both"  # Options: "xrdp", "xpra", or "both"
 
+# RHEL Subscription Manager — set register="false" if already registered
 register="true"
-orgId="ORG_ID"
-activationKey="ACTIVATION_KEY"
+orgId="${1:-ORG_ID}"                    # <-- REQUIRED: Pass as 1st arg or replace with your RHEL Org ID
+activationKey="${2:-ACTIVATION_KEY}"    # <-- REQUIRED: Pass as 2nd arg or replace with your activation key
 
 output_directory="/usr/local/bin"
 dconf_local_directory="/etc/dconf/db/local.d"
@@ -50,8 +51,8 @@ CURRENT_USERS_DETAILS="$output_directory/xrdp-loggedin-users.txt"
 
 CRON_SCHEDULE="0 * * * *" 
 
-YOUR_LINUXBROKER_API_CLIENT_ID="my_actual_client_id"
-YOUR_LINUXBROKER_API_URL="my.actual.linuxbroker.api.url"
+YOUR_LINUXBROKER_API_CLIENT_ID="${3:-my_actual_client_id}"   # <-- REQUIRED: Pass as 3rd arg or replace with API Client ID
+YOUR_LINUXBROKER_API_URL="${4:-my.actual.linuxbroker.api.url}" # <-- REQUIRED: Pass as 4th arg or replace with API URL
 
 # ===============================
 # Execution

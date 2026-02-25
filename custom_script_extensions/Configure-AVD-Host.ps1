@@ -3,7 +3,11 @@
 param(
     [Parameter(Mandatory = $true, HelpMessage = "The base URL for the Linux Broker API, e.g. https://your-broker.domain.com/api")]
     [ValidateNotNullOrEmpty()]
-    [string]$LinuxBrokerApiBaseUrl
+    [string]$LinuxBrokerApiBaseUrl,
+
+    [Parameter(Mandatory = $true, HelpMessage = "The API App Registration Client ID for managed identity token acquisition")]
+    [ValidateNotNullOrEmpty()]
+    [string]$LinuxBrokerApiClientId
 )
 
 $sourceName = "LinuxBrokerScript"
@@ -192,6 +196,17 @@ catch {
     exit 1
 }
 
+# Modify the API Client ID in the script
+try {
+    Write-Log "Updating API Client ID in script to: $LinuxBrokerApiClientId"
+    [System.IO.File]::WriteAllText($outputPath, ([System.IO.File]::ReadAllText($outputPath) -replace 'your_linuxbroker_api_client_id', $LinuxBrokerApiClientId))
+    Write-Log "Updated API Client ID in $outputPath successfully."
+}
+catch {
+    Write-Log "Failed to update API Client ID. Error: $_" -Level Error
+    exit 1
+}
+
 # Check if Azure CLI is already installed before downloading
 if (Get-Command az -ErrorAction SilentlyContinue) {
     Write-Log "Azure CLI is already installed."
@@ -291,4 +306,4 @@ catch {
     Write-Log "Failed to set the AuthenticationLevelOverride registry key: $_" -Level Error
 }
 
-Write-Log "Configuration complete! Linux Broker API Base URL set to: $LinuxBrokerApiBaseUrl"
+Write-Log "Configuration complete! Linux Broker API Base URL set to: $LinuxBrokerApiBaseUrl, Client ID: $LinuxBrokerApiClientId"

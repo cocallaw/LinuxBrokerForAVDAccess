@@ -161,6 +161,7 @@ resource frontendApp 'Microsoft.Web/sites@2023-12-01' = {
     siteConfig: {
       linuxFxVersion: 'PYTHON|3.11'
       alwaysOn: true
+      healthCheckPath: '/health'
       appSettings: [
         {
           name: 'WEBSITES_ENABLE_APP_SERVICE_STORAGE'

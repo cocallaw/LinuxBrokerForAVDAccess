@@ -33,6 +33,17 @@ param sshPublicKey string = ''
 ])
 param OSVersion string
 
+// Linux Broker Configuration
+@description('RHEL Subscription Manager Org ID (required for RHEL hosts)')
+param rhelOrgId string = ''
+@description('RHEL Subscription Manager Activation Key (required for RHEL hosts)')
+@secure()
+param rhelActivationKey string = ''
+@description('Linux Broker API App Registration Client ID')
+param linuxBrokerApiClientId string = ''
+@description('Linux Broker API base URL (e.g. https://your-broker.domain.com/api)')
+param linuxBrokerApiUrl string = ''
+
 var vmNames = [for i in range(1, numberOfVMs): '${vmNamePrefix}-${padLeft(i, 2, '0')}']
 var adminPass = authType == 'Password' ? adminPassword : sshPublicKey
 
@@ -46,7 +57,7 @@ var imageConfigs = {
     }
     script: {
       uri: 'https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDAccess/refs/heads/main/custom_script_extensions/Configure-RHEL7-Host.sh'
-      cmd: 'bash Configure-RHEL7-Host.sh'
+      cmd: 'bash Configure-RHEL7-Host.sh \'${rhelOrgId}\' \'${rhelActivationKey}\' \'${linuxBrokerApiClientId}\' \'${linuxBrokerApiUrl}\''
     }
   }
   '8-LVM': {
@@ -58,7 +69,7 @@ var imageConfigs = {
     }
     script: {
       uri: 'https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDAccess/refs/heads/main/custom_script_extensions/Configure-RHEL8-Host.sh'
-      cmd: 'bash Configure-RHEL8-Host.sh'
+      cmd: 'bash Configure-RHEL8-Host.sh \'${rhelOrgId}\' \'${rhelActivationKey}\' \'${linuxBrokerApiClientId}\' \'${linuxBrokerApiUrl}\''
     }
   }
   '9-LVM': {
@@ -70,7 +81,7 @@ var imageConfigs = {
     }
     script: {
       uri: 'https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDAccess/refs/heads/main/custom_script_extensions/Configure-RHEL9-Host.sh'
-      cmd: 'bash Configure-RHEL9-Host.sh'
+      cmd: 'bash Configure-RHEL9-Host.sh \'${rhelOrgId}\' \'${rhelActivationKey}\' \'${linuxBrokerApiClientId}\' \'${linuxBrokerApiUrl}\''
     }
   }
   '24_04-lts': {
@@ -82,7 +93,7 @@ var imageConfigs = {
     }
     script: {
       uri: 'https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDAccess/refs/heads/main/custom_script_extensions/Configure-Ubuntu24_desktop-Host.sh'
-      cmd: 'bash Configure-Ubuntu24_desktop-Host.sh'
+      cmd: 'bash Configure-Ubuntu24_desktop-Host.sh \'${linuxBrokerApiClientId}\' \'${linuxBrokerApiUrl}\''
     }
   }
 }

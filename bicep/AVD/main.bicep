@@ -52,6 +52,8 @@ param adminPassword string
 // Linux Broker API Base URL
 @description('Base URL for the AVD Linux Broker API')
 param linuxBrokerApiBaseUrl string
+@description('API App Registration Client ID for managed identity token acquisition')
+param linuxBrokerApiClientId string
 // Linux Broker Configuration Script URI
 @description('URI for the AVD Linux Broker configuration script')
 param linuxBrokerConfigScriptUri string = 'https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDAccess/refs/heads/main/custom_script_extensions/Configure-AVD-Host.ps1'
@@ -302,7 +304,7 @@ resource linuxBrokerConfig 'Microsoft.Compute/virtualMachines/extensions@2024-11
         fileUris: array(linuxBrokerConfigScriptUri)
       }
       protectedSettings: {
-        commandToExecute: 'powershell -ExecutionPolicy Unrestricted -File Configure-AVD-Host.ps1 -LinuxBrokerApiBaseUrl "${linuxBrokerApiBaseUrl}"'
+        commandToExecute: 'powershell -ExecutionPolicy Unrestricted -File Configure-AVD-Host.ps1 -LinuxBrokerApiBaseUrl "${linuxBrokerApiBaseUrl}" -LinuxBrokerApiClientId "${linuxBrokerApiClientId}"'
       }
     }
     dependsOn: [

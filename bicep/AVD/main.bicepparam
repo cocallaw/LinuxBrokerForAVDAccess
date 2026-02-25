@@ -18,3 +18,4 @@ param vnetResourceGroup = 'myVnetResourceGroup'
 
 /*API Config*/
 param linuxBrokerApiBaseUrl = 'https://your-broker.domain.com/api'
+param linuxBrokerApiClientId = 'your-api-app-registration-client-id'

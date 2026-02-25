@@ -18,6 +18,8 @@ param avdVmSize string = 'Standard_DS2_v2'
 param avdAdminUsername string = 'avdadmin'
 @secure()
 param avdAdminPassword string = ''
+@description('API App Registration Client ID for managed identity token acquisition on AVD hosts')
+param linuxBrokerApiClientId string = ''
 
 // Linux VMs Configuration (optional)
 param deployLinuxVMs bool = false
@@ -34,6 +36,11 @@ param linuxAdminUsername string = 'linuxadmin'
 @secure()
 param linuxAdminPassword string = ''
 param linuxSshPublicKey string = ''
+@description('RHEL Subscription Manager Org ID (required for RHEL hosts)')
+param rhelOrgId string = ''
+@description('RHEL Subscription Manager Activation Key (required for RHEL hosts)')
+@secure()
+param rhelActivationKey string = ''
 
 // Network Configuration (required if deploying VMs)
 param vnetName string = ''
@@ -71,6 +78,7 @@ module avdDeployment 'AVD/main.bicep' = if (deployAVD) {
     subnetName: subnetName
     vnetResourceGroup: vnetResourceGroup
     linuxBrokerApiBaseUrl: infrastructure.outputs.apiAppUrl
+    linuxBrokerApiClientId: linuxBrokerApiClientId
   }
 }
 
@@ -92,6 +100,10 @@ module linuxVmDeployment 'Linux/main.bicep' = if (deployLinuxVMs) {
     vnetName: vnetName
     subnetName: subnetName
     vnetResourceGroup: vnetResourceGroup
+    rhelOrgId: rhelOrgId
+    rhelActivationKey: rhelActivationKey
+    linuxBrokerApiClientId: linuxBrokerApiClientId
+    linuxBrokerApiUrl: infrastructure.outputs.apiAppUrl
   }
   dependsOn: [
     infrastructure

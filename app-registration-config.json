@@ -1,0 +1,15 @@
+{
+  "FrontendAppName": "LinuxBroker-Frontend-m6ko3f",
+  "FrontendAppId": "FAILED_TO_CREATE",
+  "FrontendServicePrincipalId": "FAILED_TO_CREATE",
+  "DeploymentId": "m6ko3f",
+  "TenantId": "18828407-d6bb-465f-bba3-f6ab82d1c4a4",
+  "LinuxHostGroupId": "NOT_CREATED",
+  "LinuxHostGroupName": "LinuxBroker-LinuxHost-VMs-m6ko3f",
+  "ApiAppId": "FAILED_TO_CREATE",
+  "AVDHostGroupName": "LinuxBroker-AVDHost-VMs-m6ko3f",
+  "AVDHostGroupId": "NOT_CREATED",
+  "FrontendClientSecret": "FAILED_TO_CREATE",
+  "ApiServicePrincipalId": "FAILED_TO_CREATE",
+  "ApiAppName": "LinuxBroker-API-m6ko3f"
+}

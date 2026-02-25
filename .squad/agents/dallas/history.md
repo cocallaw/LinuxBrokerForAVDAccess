@@ -139,3 +139,21 @@
 - **Parker:** Bicep custom script extensions need to pass new `-LinuxBrokerApiClientId` parameter to Configure-AVD-Host.ps1. Linux host extensions now accept positional args instead of relying on hardcoded defaults.
 - **Ash:** Coordinate on idempotency changes to SQL scripts for pymssql compatibility. Procedures now use `CREATE OR ALTER` (no behavioral change to pymssql callers).
 - **Lambert:** `.env.template` now covers the full stack including frontend vars. All components reference this single file for env var documentation.
+
+### Deployment Documentation (2025-07-25)
+
+**Created `DEPLOYMENT.md`** — the single end-to-end deployment guide for the solution.
+
+**Key decisions:**
+- Created a dedicated `DEPLOYMENT.md` rather than expanding README.md, because README was already 300+ lines with architecture, RBAC, and workflow documentation. Deployment guide is ~300 lines on its own — cramming it into README would make both harder to navigate.
+- Replaced README.md's "Getting Started" section with a concise "Deployment" section that links to DEPLOYMENT.md with a quick-start snippet.
+- Fixed broken README references to `DEPLOYMENT_IMPROVEMENTS.md` (never existed) and `CONTRIBUTING.md` (doesn't exist — pointed to CODE_OF_CONDUCT.md and SUPPORT.md instead).
+- DEPLOYMENT.md references only files that actually exist — all 17 file references verified.
+- The guide follows the 7-phase configuration flow from CONFIGURATION.md but adds the orchestration scripts (Check-Prerequisites, Test-DeploymentReadiness, Deploy-LinuxBroker, Deploy-Database, Test-PostDeployment) as concrete steps.
+- Deliberately does NOT duplicate content from CONFIGURATION.md or sql_queries/README.md — links to them instead.
+
+**Key file paths:**
+- `DEPLOYMENT.md` — end-to-end deployment guide (new)
+- `README.md` — updated Deployment section with link to DEPLOYMENT.md
+- `CONFIGURATION.md` — environment variable reference (existing, unchanged)
+- `sql_queries/README.md` — database setup reference (existing, unchanged)

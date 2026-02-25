@@ -189,113 +189,48 @@ Given that AVD acts as a pass-through in this solution, starting with **light to
    - Use multiple smaller VMs (e.g., 8-core instances) rather than fewer large VMs. This allows for better load balancing and resource management.
    - Smaller VMs can be shut down when not in use, conserving resources and reducing costs. Use Azure autoscale to manage VM power states based on demand.
 
-## Getting Started
+## Deployment
 
-### Quick Deployment (Recommended)
+**👉 See [DEPLOYMENT.md](DEPLOYMENT.md) for the complete step-by-step deployment guide.**
 
-We've streamlined the deployment process! Use these PowerShell scripts for a complete, automated deployment:
+The deployment guide covers prerequisites, infrastructure provisioning, database setup, environment configuration, and post-deployment validation — everything needed to go from zero to a running solution.
 
-1. **Check Prerequisites**:
-   ```powershell
-   .\deploy\Check-Prerequisites.ps1
-   ```
+### Quick Start
 
-2. **Setup Azure AD Applications**:
-   ```powershell
-   .\deploy\Setup-AppRegistrations.ps1 -TenantId <your-tenant-id>
-   ```
-
-3. **Deploy Infrastructure Only**:
-   ```powershell
-   .\deploy\Deploy-LinuxBroker.ps1 -SubscriptionId <subscription-id> -ResourceGroupName <resource-group> -Location <location>
-   ```
-
-4. **Deploy with VMs** (Optional - using configuration file):
-   ```powershell
-   # Copy and customize a configuration file
-   Copy-Item ".\vm-deployment-config.example.json" ".\my-vm-config.json"
-   # Edit my-vm-config.json with your settings
-   
-   # Deploy with VMs
-   .\deploy\Deploy-LinuxBroker.ps1 -SubscriptionId <subscription-id> -ResourceGroupName <resource-group> -Location <location> -VMConfigPath ".\my-vm-config.json"
-   ```
-
-### Key Features:
-- ✅ **One-click deployment** with automatic permission configuration
-- ✅ **Enhanced reliability** with multi-method authentication fallback
-- ✅ **Real-time progress tracking** with timestamped logging
-- ✅ **Modern Azure CLI** commands for improved compatibility
-- ✅ **Integrated Microsoft Graph** functionality for app role assignments
-
-### Alternative Deployment Methods:
-
-**Using Bicep Templates Directly**:
-```bash
-az deployment group create --resource-group <rg-name> --template-file bicep/main.bicep --parameters @bicep/main.bicepparam
-```
-
-**Testing Deployment Readiness**:
 ```powershell
+# 1. Verify your environment is ready
 .\deploy\Test-DeploymentReadiness.ps1 -SubscriptionId <sub-id> -ResourceGroupName <rg-name>
+
+# 2. Check tool prerequisites
+.\deploy\Check-Prerequisites.ps1
+
+# 3. Create Azure AD app registrations
+.\deploy\Setup-AppRegistrations.ps1 -TenantId <tenant-id>
+
+# 4. Deploy infrastructure
+.\deploy\Deploy-LinuxBroker.ps1 -SubscriptionId <sub-id> -ResourceGroupName <rg-name> -Location <region>
+
+# 5. Deploy database schema
+cd sql_queries && .\Deploy-Database.ps1 -ServerName "<server>.database.windows.net" -DatabaseName "linuxbroker" -UseAzureAD && cd ..
+
+# 6. Configure environment variables (see DEPLOYMENT.md Step 6 and CONFIGURATION.md)
+
+# 7. Validate deployment
+.\deploy\Test-PostDeployment.ps1 -SubscriptionId <sub-id> -ResourceGroupName <rg-name>
 ```
 
-**Update Environment Variables** (after Setup-AppRegistrations.ps1):
-```powershell
-.\deploy\Update-EnvironmentVariables.ps1 -SubscriptionId <sub-id> -ResourceGroupName <rg-name>
-```
+### Key Documentation
 
-### VM Configuration Options:
-
-The deployment script supports optional VM deployment using JSON configuration files:
-
-- **Core Infrastructure Only**: No configuration file needed
-- **With VMs**: Use `-VMConfigPath` parameter with a JSON configuration file
-
-**Configuration Examples**:
-- `vm-deployment-config.example.json` - Full example with both AVD and Linux VMs
-- `configs/linux-only-deployment.json` - Deploy only Linux VMs
-- `configs/avd-only-deployment.json` - Deploy only AVD hosts  
-- `configs/full-deployment.json` - Production example with both VM types
-
-**Configuration Structure**:
-```json
-{
-  "avd": {
-    "deploy": true/false,
-    "hostPoolName": "hp-name",
-    "sessionHostCount": 2,
-    "vmSize": "Standard_DS2_v2",
-    "adminUsername": "username",
-    "adminPassword": "password"
-  },
-  "linuxVMs": {
-    "deploy": true/false,
-    "vmCount": 3,
-    "vmSize": "Standard_D2s_v3", 
-    "osVersion": "24_04-lts",
-    "adminUsername": "username",
-    "adminPassword": "password"
-  },
-  "network": {
-    "vnetName": "existing-vnet",
-    "subnetName": "existing-subnet", 
-    "vnetResourceGroup": "network-rg"
-  }
-}
-```
-
-### What's New:
-
-- **Simplified Process**: No more separate permission configuration scripts
-- **Better Error Handling**: Comprehensive logging and fallback mechanisms  
-- **Enhanced Security**: Automatic managed identity and app role configuration
-- **Improved Visibility**: Timestamped progress messages throughout deployment
-
-For detailed information about the deployment improvements, see [DEPLOYMENT_IMPROVEMENTS.md](DEPLOYMENT_IMPROVEMENTS.md).
+| Document | Purpose |
+|----------|---------|
+| [DEPLOYMENT.md](DEPLOYMENT.md) | End-to-end deployment guide |
+| [CONFIGURATION.md](CONFIGURATION.md) | Environment variable reference (all 7 phases) |
+| [sql_queries/README.md](sql_queries/README.md) | Database schema and stored procedures |
+| [deploy/QUICKSTART.md](deploy/QUICKSTART.md) | Condensed quick-start reference |
 
 ## Contributing
 
-Contributions are welcome! Please read the [CONTRIBUTING](CONTRIBUTING.md) guidelines for more information.
+Contributions are welcome! Please review the [Code of Conduct](CODE_OF_CONDUCT.md) and [Support](SUPPORT.md) documentation before contributing.
 
 ## License
 

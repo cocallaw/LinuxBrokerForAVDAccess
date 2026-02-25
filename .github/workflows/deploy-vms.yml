@@ -1,0 +1,203 @@
+# deploy-vms.yml
+# Optional VM deployment for the Linux Broker solution.
+# Deploys Linux VMs using Bicep templates and configures them via custom script extensions.
+#
+# Prerequisites:
+#   - Core infrastructure must be deployed first (deploy-infrastructure.yml)
+#   - Network (VNet/Subnet) must already exist
+#   - RHEL VMs require RHEL_ORG_ID and RHEL_ACTIVATION_KEY secrets
+
+name: Deploy VMs
+
+on:
+  workflow_dispatch:
+    inputs:
+      vm_count:
+        description: 'Number of VMs to deploy (1-20)'
+        required: true
+        default: '2'
+        type: string
+      vm_size:
+        description: 'Azure VM size'
+        required: true
+        default: 'Standard_D2s_v3'
+        type: choice
+        options:
+          - Standard_D2s_v3
+          - Standard_D4s_v3
+          - Standard_D8s_v3
+          - Standard_DS2_v2
+          - Standard_DS3_v2
+      os_type:
+        description: 'Linux OS version'
+        required: true
+        default: '24_04-lts'
+        type: choice
+        options:
+          - '24_04-lts'   # Ubuntu 24.04
+          - '9-LVM'       # RHEL 9
+          - '8-LVM'       # RHEL 8
+          - '7-LVM'       # RHEL 7
+      resource_group:
+        description: 'Resource group for VMs (overrides secret)'
+        required: false
+        default: ''
+        type: string
+      vnet_name:
+        description: 'Virtual network name'
+        required: true
+        type: string
+      subnet_name:
+        description: 'Subnet name'
+        required: true
+        type: string
+      vnet_resource_group:
+        description: 'Resource group containing the VNet'
+        required: true
+        type: string
+      auth_type:
+        description: 'VM authentication type'
+        required: true
+        default: 'Password'
+        type: choice
+        options:
+          - Password
+          - SSH
+      admin_username:
+        description: 'VM admin username'
+        required: false
+        default: 'linuxadmin'
+        type: string
+      add_to_security_groups:
+        description: 'Add VMs to security groups after deployment'
+        required: false
+        default: true
+        type: boolean
+
+# Prevent parallel VM deployments
+concurrency:
+  group: vm-deployment
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  RESOURCE_GROUP: ${{ github.event.inputs.resource_group || secrets.RESOURCE_GROUP }}
+
+jobs:
+  deploy-vms:
+    name: Deploy Linux VMs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate VM count
+        shell: bash
+        run: |
+          VM_COUNT=${{ inputs.vm_count }}
+          if [ "$VM_COUNT" -lt 1 ] || [ "$VM_COUNT" -gt 20 ]; then
+            echo "::error::VM count must be between 1 and 20. Got: ${VM_COUNT}"
+            exit 1
+          fi
+
+      - name: Warn about RHEL requirements
+        if: contains(inputs.os_type, 'LVM')
+        shell: bash
+        run: |
+          echo "::warning::RHEL deployment requires RHEL_ORG_ID and RHEL_ACTIVATION_KEY secrets."
+
+      - name: Log in to Azure via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Discover API URL from infrastructure
+        id: discover
+        shell: bash
+        run: |
+          # Find the API app in the infrastructure resource group
+          API_APP=$(az webapp list \
+            --resource-group "${{ secrets.RESOURCE_GROUP }}" \
+            --query "[?contains(name, 'api')].defaultHostName" \
+            --output tsv 2>/dev/null | head -1)
+
+          if [ -n "$API_APP" ]; then
+            echo "api_url=https://${API_APP}" >> $GITHUB_OUTPUT
+            echo "Found API at: https://${API_APP}"
+          else
+            echo "::warning::Could not discover API URL. VM custom script extensions may not configure correctly."
+            echo "api_url=" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create VM resource group
+        shell: bash
+        run: |
+          az group create \
+            --name "${{ env.RESOURCE_GROUP }}" \
+            --location "$(az group show --name '${{ secrets.RESOURCE_GROUP }}' --query location --output tsv)" \
+            --tags project=linuxbroker component=vms
+
+      - name: Deploy Linux VMs via Bicep
+        shell: bash
+        run: |
+          # Generate a secure password for VM admin
+          VM_PASSWORD=$(openssl rand -base64 16)
+
+          az deployment group create \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --template-file "./bicep/Linux/main.bicep" \
+            --name "gh-vms-$(date +%Y%m%d-%H%M%S)" \
+            --parameters \
+              vmNamePrefix="linuxbroker-linux" \
+              vmSize="${{ inputs.vm_size }}" \
+              numberOfVMs=${{ inputs.vm_count }} \
+              OSVersion="${{ inputs.os_type }}" \
+              authType="${{ inputs.auth_type }}" \
+              adminUsername="${{ inputs.admin_username }}" \
+              adminPassword="${VM_PASSWORD}" \
+              vnetName="${{ inputs.vnet_name }}" \
+              subnetName="${{ inputs.subnet_name }}" \
+              vnetResourceGroup="${{ inputs.vnet_resource_group }}" \
+              rhelOrgId="${{ secrets.RHEL_ORG_ID }}" \
+              rhelActivationKey="${{ secrets.RHEL_ACTIVATION_KEY }}" \
+              linuxBrokerApiClientId="${{ secrets.API_CLIENT_ID }}" \
+              linuxBrokerApiUrl="${{ steps.discover.outputs.api_url }}"
+
+      - name: Add VMs to security groups
+        if: inputs.add_to_security_groups
+        shell: pwsh
+        run: |
+          # Check if app-registration-config.json artifact exists or create minimal config
+          $configPath = "./app-registration-config.json"
+
+          if (-not (Test-Path $configPath)) {
+            Write-Host "::warning::app-registration-config.json not found. Skipping security group assignment."
+            Write-Host "Run deploy/Add-VMsToSecurityGroups.ps1 manually after creating the config."
+            exit 0
+          }
+
+          ./deploy/Add-VMsToSecurityGroups.ps1 `
+            -SubscriptionId "${{ secrets.AZURE_SUBSCRIPTION_ID }}" `
+            -AppConfigPath $configPath `
+            -LinuxResourceGroupName "${{ env.RESOURCE_GROUP }}"
+
+      - name: Write deployment summary
+        if: always()
+        shell: bash
+        run: |
+          echo "## 🖥️ VM Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| VM Count | ${{ inputs.vm_count }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| VM Size | ${{ inputs.vm_size }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| OS | ${{ inputs.os_type }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Resource Group | ${{ env.RESOURCE_GROUP }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Network | ${{ inputs.vnet_name }}/${{ inputs.subnet_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Auth Type | ${{ inputs.auth_type }} |" >> $GITHUB_STEP_SUMMARY

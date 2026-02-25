@@ -1,0 +1,381 @@
+# deploy-infrastructure.yml
+# Main deployment workflow for the Linux Broker for AVD Access solution.
+# Deploys core infrastructure (Bicep), database schema, applications, and runs validation.
+#
+# Flow mirrors deploy/Deploy-LinuxBroker.ps1:
+#   1. Prerequisites check
+#   2. Bicep infrastructure deployment (App Service, SQL, Key Vault, Function App)
+#   3. Database schema deployment via sql_queries/Deploy-Database.ps1
+#   4. App Service environment variable configuration
+#   5. API deployment to App Service
+#   6. Function App deployment
+#   7. Frontend deployment to App Service
+#   8. Post-deployment validation
+
+name: Deploy Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      resource_group:
+        description: 'Azure Resource Group name (overrides secret)'
+        required: false
+        default: ''
+        type: string
+      location:
+        description: 'Azure region for deployment'
+        required: true
+        default: 'eastus'
+        type: choice
+        options:
+          - eastus
+          - eastus2
+          - westus2
+          - westus3
+          - centralus
+          - northeurope
+          - westeurope
+          - uksouth
+      project_name:
+        description: 'Project name prefix for resources'
+        required: false
+        default: 'linuxbroker'
+        type: string
+      skip_db_deploy:
+        description: 'Skip database schema deployment'
+        required: false
+        default: false
+        type: boolean
+      skip_app_deploy:
+        description: 'Skip application code deployment'
+        required: false
+        default: false
+        type: boolean
+
+# Only one infrastructure deployment at a time
+concurrency:
+  group: infrastructure-${{ github.event.inputs.environment }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write   # OIDC token for azure/login
+  contents: read
+
+env:
+  RESOURCE_GROUP: ${{ github.event.inputs.resource_group || secrets.RESOURCE_GROUP }}
+
+jobs:
+  # ─── Stage 1: Validate prerequisites ─────────────────────────────────
+  prerequisites:
+    name: Check Prerequisites
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Azure via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Run prerequisite checks
+        shell: pwsh
+        run: |
+          ./deploy/Check-Prerequisites.ps1 `
+            -SubscriptionId "${{ secrets.AZURE_SUBSCRIPTION_ID }}" `
+            -SkipPermissionCheck
+
+  # ─── Stage 2: Deploy infrastructure ──────────────────────────────────
+  deploy-infra:
+    name: Deploy Bicep Infrastructure
+    runs-on: ubuntu-latest
+    needs: prerequisites
+    environment: ${{ github.event.inputs.environment }}
+    outputs:
+      api_app_name: ${{ steps.parse-outputs.outputs.api_app_name }}
+      frontend_app_name: ${{ steps.parse-outputs.outputs.frontend_app_name }}
+      function_app_name: ${{ steps.parse-outputs.outputs.function_app_name }}
+      sql_server_name: ${{ steps.parse-outputs.outputs.sql_server_name }}
+      sql_server_fqdn: ${{ steps.parse-outputs.outputs.sql_server_fqdn }}
+      key_vault_name: ${{ steps.parse-outputs.outputs.key_vault_name }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Azure via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Create resource group
+        shell: bash
+        run: |
+          az group create \
+            --name "${{ env.RESOURCE_GROUP }}" \
+            --location "${{ inputs.location }}" \
+            --tags environment=${{ inputs.environment }} project=${{ inputs.project_name }}
+
+      - name: Deploy Bicep templates
+        id: bicep-deploy
+        shell: bash
+        run: |
+          DEPLOYMENT_NAME="gh-infra-$(date +%Y%m%d-%H%M%S)"
+          echo "deployment_name=${DEPLOYMENT_NAME}" >> $GITHUB_OUTPUT
+
+          az deployment group create \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --template-file "./bicep/main.bicep" \
+            --name "${DEPLOYMENT_NAME}" \
+            --parameters \
+              projectName="${{ inputs.project_name }}" \
+              environment="${{ inputs.environment }}" \
+              sqlAdminPassword="${{ secrets.SQL_PASSWORD }}" \
+              deployAVD=false \
+              deployLinuxVMs=false
+
+      - name: Parse deployment outputs
+        id: parse-outputs
+        shell: bash
+        run: |
+          DEPLOYMENT_NAME="${{ steps.bicep-deploy.outputs.deployment_name }}"
+
+          OUTPUTS=$(az deployment group show \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --name "${DEPLOYMENT_NAME}" \
+            --query "properties.outputs" \
+            --output json)
+
+          # Extract resource names from Bicep outputs
+          API_URL=$(echo "$OUTPUTS" | jq -r '.apiUrl.value // empty')
+          FRONTEND_URL=$(echo "$OUTPUTS" | jq -r '.frontendUrl.value // empty')
+          SQL_SERVER=$(echo "$OUTPUTS" | jq -r '.sqlServerName.value // empty')
+          KEY_VAULT=$(echo "$OUTPUTS" | jq -r '.keyVaultName.value // empty')
+
+          # Extract app names from URLs (strip https:// and .azurewebsites.net)
+          API_APP_NAME=$(echo "$API_URL" | sed 's|https://||' | sed 's|\.azurewebsites\.net.*||')
+          FRONTEND_APP_NAME=$(echo "$FRONTEND_URL" | sed 's|https://||' | sed 's|\.azurewebsites\.net.*||')
+
+          # Discover function app name from resource group
+          FUNC_APP_NAME=$(az functionapp list \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --query "[0].name" --output tsv 2>/dev/null || echo "")
+
+          echo "api_app_name=${API_APP_NAME}" >> $GITHUB_OUTPUT
+          echo "frontend_app_name=${FRONTEND_APP_NAME}" >> $GITHUB_OUTPUT
+          echo "function_app_name=${FUNC_APP_NAME}" >> $GITHUB_OUTPUT
+          echo "sql_server_name=${SQL_SERVER}" >> $GITHUB_OUTPUT
+          echo "sql_server_fqdn=${SQL_SERVER}.database.windows.net" >> $GITHUB_OUTPUT
+          echo "key_vault_name=${KEY_VAULT}" >> $GITHUB_OUTPUT
+
+          echo "### 🏗️ Infrastructure Deployed" >> $GITHUB_STEP_SUMMARY
+          echo "| Resource | Name |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|------|" >> $GITHUB_STEP_SUMMARY
+          echo "| API App | ${API_APP_NAME} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend App | ${FRONTEND_APP_NAME} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Function App | ${FUNC_APP_NAME} |" >> $GITHUB_STEP_SUMMARY
+          echo "| SQL Server | ${SQL_SERVER} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Key Vault | ${KEY_VAULT} |" >> $GITHUB_STEP_SUMMARY
+
+  # ─── Stage 3: Deploy database schema ─────────────────────────────────
+  deploy-database:
+    name: Deploy Database Schema
+    runs-on: ubuntu-latest
+    needs: deploy-infra
+    if: ${{ github.event.inputs.skip_db_deploy != 'true' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Azure via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Add temporary SQL firewall rule
+        shell: bash
+        run: |
+          RUNNER_IP=$(curl -s https://ipinfo.io/ip)
+          echo "Runner IP: ${RUNNER_IP}"
+
+          az sql server firewall-rule create \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --server "${{ needs.deploy-infra.outputs.sql_server_name }}" \
+            --name "GitHubActions-Temp-${GITHUB_RUN_ID}" \
+            --start-ip-address "${RUNNER_IP}" \
+            --end-ip-address "${RUNNER_IP}"
+
+      - name: Deploy database schema
+        shell: pwsh
+        run: |
+          ./sql_queries/Deploy-Database.ps1 `
+            -ServerName "${{ needs.deploy-infra.outputs.sql_server_fqdn }}" `
+            -DatabaseName "LinuxBrokerDB" `
+            -Username "sqladmin" `
+            -Password "${{ secrets.SQL_PASSWORD }}"
+
+      - name: Remove temporary SQL firewall rule
+        if: always()
+        shell: bash
+        run: |
+          az sql server firewall-rule delete \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --server "${{ needs.deploy-infra.outputs.sql_server_name }}" \
+            --name "GitHubActions-Temp-${GITHUB_RUN_ID}" \
+            --yes 2>/dev/null || true
+
+  # ─── Stage 4: Configure and deploy applications ──────────────────────
+  deploy-apps:
+    name: Deploy Applications
+    runs-on: ubuntu-latest
+    needs: [deploy-infra, deploy-database]
+    if: |
+      always() &&
+      needs.deploy-infra.result == 'success' &&
+      (needs.deploy-database.result == 'success' || needs.deploy-database.result == 'skipped') &&
+      github.event.inputs.skip_app_deploy != 'true'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Azure via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Configure App Service environment variables
+        shell: bash
+        run: |
+          # Configure API App settings
+          az webapp config appsettings set \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --name "${{ needs.deploy-infra.outputs.api_app_name }}" \
+            --settings \
+              CLIENT_ID="${{ secrets.API_CLIENT_ID }}" \
+              TENANT_ID="${{ secrets.AZURE_TENANT_ID }}" \
+              API_CLIENT_ID="${{ secrets.API_CLIENT_ID }}" \
+              MICROSOFT_PROVIDER_AUTHENTICATION_SECRET="${{ secrets.AUTH_SECRET }}" \
+            --output none
+
+          # Configure Frontend App settings
+          az webapp config appsettings set \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --name "${{ needs.deploy-infra.outputs.frontend_app_name }}" \
+            --settings \
+              CLIENT_ID="${{ secrets.API_CLIENT_ID }}" \
+              TENANT_ID="${{ secrets.AZURE_TENANT_ID }}" \
+              API_CLIENT_ID="${{ secrets.API_CLIENT_ID }}" \
+              MICROSOFT_PROVIDER_AUTHENTICATION_SECRET="${{ secrets.AUTH_SECRET }}" \
+            --output none
+
+          # Configure Function App settings
+          az functionapp config appsettings set \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --name "${{ needs.deploy-infra.outputs.function_app_name }}" \
+            --settings \
+              API_CLIENT_ID="${{ secrets.API_CLIENT_ID }}" \
+            --output none
+
+      - name: Deploy API application
+        shell: bash
+        run: |
+          cd api
+          zip -r ../api.zip . -x "*.pyc" "__pycache__/*" ".env" "*.egg-info/*"
+          cd ..
+          az webapp deploy \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --name "${{ needs.deploy-infra.outputs.api_app_name }}" \
+            --src-path "./api.zip" \
+            --type zip
+          rm -f api.zip
+
+      - name: Deploy Frontend application
+        shell: bash
+        run: |
+          cd front_end
+          zip -r ../frontend.zip . -x "*.pyc" "__pycache__/*" ".env" "*.egg-info/*"
+          cd ..
+          az webapp deploy \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --name "${{ needs.deploy-infra.outputs.frontend_app_name }}" \
+            --src-path "./frontend.zip" \
+            --type zip
+          rm -f frontend.zip
+
+      - name: Deploy Function App
+        shell: bash
+        run: |
+          cd task
+          zip -r ../function_app.zip . \
+            -x ".git/*" ".vscode/*" ".funcignore" "local.settings.json" "*.zip"
+          cd ..
+          az functionapp deployment source config-zip \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --name "${{ needs.deploy-infra.outputs.function_app_name }}" \
+            --src "./function_app.zip"
+          rm -f function_app.zip
+
+  # ─── Stage 5: Post-deployment validation ─────────────────────────────
+  validate:
+    name: Post-Deployment Validation
+    runs-on: ubuntu-latest
+    needs: [deploy-infra, deploy-apps]
+    if: |
+      always() &&
+      needs.deploy-infra.result == 'success' &&
+      (needs.deploy-apps.result == 'success' || needs.deploy-apps.result == 'skipped')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Azure via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Run post-deployment validation
+        shell: pwsh
+        run: |
+          $apiUrl = "https://${{ needs.deploy-infra.outputs.api_app_name }}.azurewebsites.net"
+
+          ./deploy/Test-PostDeployment.ps1 `
+            -ApiBaseUrl $apiUrl `
+            -ResourceGroupName "${{ env.RESOURCE_GROUP }}" `
+            -SubscriptionId "${{ secrets.AZURE_SUBSCRIPTION_ID }}"
+
+      - name: Write deployment summary
+        if: always()
+        shell: bash
+        run: |
+          echo "## 🚀 Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Environment | ${{ inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Resource Group | ${{ env.RESOURCE_GROUP }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| API URL | https://${{ needs.deploy-infra.outputs.api_app_name }}.azurewebsites.net |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend URL | https://${{ needs.deploy-infra.outputs.frontend_app_name }}.azurewebsites.net |" >> $GITHUB_STEP_SUMMARY
+          echo "| Run | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> $GITHUB_STEP_SUMMARY

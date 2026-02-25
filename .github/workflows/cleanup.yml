@@ -1,0 +1,112 @@
+# cleanup.yml
+# Manual resource teardown for the Linux Broker solution.
+#
+# ⚠️  DESTRUCTIVE: This deletes ALL resources in the target resource group.
+# Requires explicit confirmation input to prevent accidental deletion.
+
+name: Cleanup Resources
+
+on:
+  workflow_dispatch:
+    inputs:
+      resource_group:
+        description: 'Resource group to delete (overrides secret)'
+        required: false
+        default: ''
+        type: string
+      confirm_delete:
+        description: 'Type DELETE to confirm resource destruction'
+        required: true
+        type: string
+      what_if:
+        description: 'Preview only — do not actually delete'
+        required: false
+        default: false
+        type: boolean
+
+# Prevent parallel cleanup operations
+concurrency:
+  group: cleanup
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  RESOURCE_GROUP: ${{ github.event.inputs.resource_group || secrets.RESOURCE_GROUP }}
+
+jobs:
+  cleanup:
+    name: Cleanup Resources
+    runs-on: ubuntu-latest
+    environment: production  # Requires approval if environment protection rules are set
+
+    steps:
+      - name: Validate confirmation
+        shell: bash
+        run: |
+          if [ "${{ inputs.confirm_delete }}" != "DELETE" ]; then
+            echo "::error::Confirmation failed. You must type 'DELETE' to confirm resource destruction."
+            echo "::error::You entered: '${{ inputs.confirm_delete }}'"
+            exit 1
+          fi
+          echo "✅ Confirmation accepted."
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Azure via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: List resources to be deleted
+        shell: bash
+        run: |
+          echo "## 🗑️ Resources in ${{ env.RESOURCE_GROUP }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          RESOURCES=$(az resource list \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --query "[].{name:name, type:type}" \
+            --output table 2>/dev/null || echo "Resource group not found")
+
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "${RESOURCES}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+          echo "${RESOURCES}"
+
+      - name: Run cleanup (what-if)
+        if: inputs.what_if
+        shell: pwsh
+        run: |
+          ./deploy/Cleanup-LinuxBroker.ps1 `
+            -SubscriptionId "${{ secrets.AZURE_SUBSCRIPTION_ID }}" `
+            -ResourceGroupName "${{ env.RESOURCE_GROUP }}" `
+            -WhatIf
+
+      - name: Run cleanup (destructive)
+        if: ${{ !inputs.what_if }}
+        shell: pwsh
+        run: |
+          ./deploy/Cleanup-LinuxBroker.ps1 `
+            -SubscriptionId "${{ secrets.AZURE_SUBSCRIPTION_ID }}" `
+            -ResourceGroupName "${{ env.RESOURCE_GROUP }}" `
+            -Force
+
+      - name: Write summary
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ inputs.what_if }}" = "true" ]; then
+            echo "## 🔍 What-If Preview Complete" >> $GITHUB_STEP_SUMMARY
+            echo "No resources were deleted. Run again without 'Preview only' to delete." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ✅ Cleanup Initiated" >> $GITHUB_STEP_SUMMARY
+            echo "Resource group **${{ env.RESOURCE_GROUP }}** deletion has been started." >> $GITHUB_STEP_SUMMARY
+            echo "Deletion runs asynchronously and may take several minutes to complete." >> $GITHUB_STEP_SUMMARY
+          fi

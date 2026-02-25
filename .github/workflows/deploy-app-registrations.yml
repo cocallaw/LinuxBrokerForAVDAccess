@@ -1,0 +1,115 @@
+# deploy-app-registrations.yml
+# Creates Azure AD App Registrations for the Linux Broker solution.
+#
+# ⚠️  ELEVATED PERMISSIONS REQUIRED:
+#   This workflow requires Microsoft Graph API consent (Application.ReadWrite.All,
+#   Directory.Read.All, Group.ReadWrite.All). The service principal running this
+#   workflow must have these permissions pre-granted by a Global Administrator.
+#
+# ⚠️  MANUAL / GATED STEP:
+#   This is intentionally workflow_dispatch only. App Registration creation is a
+#   one-time setup step that produces secrets (client IDs, client secret) which
+#   must be stored as GitHub Secrets before other workflows can run.
+#
+# After running, store the output values as GitHub Secrets:
+#   - API_CLIENT_ID  → from the API App Registration
+#   - AUTH_SECRET     → from the Frontend App client secret
+
+name: Deploy App Registrations
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_app_name:
+        description: 'API App Registration display name'
+        required: false
+        default: 'LinuxBroker-API'
+        type: string
+      frontend_app_name:
+        description: 'Frontend App Registration display name'
+        required: false
+        default: 'LinuxBroker-Frontend'
+        type: string
+      deployment_id:
+        description: 'Deployment identifier (auto-generated if blank)'
+        required: false
+        default: ''
+        type: string
+
+# Prevent parallel runs — app registration is a one-time setup
+concurrency:
+  group: app-registrations
+  cancel-in-progress: false
+
+permissions:
+  id-token: write   # OIDC token for azure/login
+  contents: read
+
+jobs:
+  create-app-registrations:
+    name: Create App Registrations
+    runs-on: ubuntu-latest
+    environment: production  # Requires approval if environment protection rules are set
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Azure via OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          enable-AzPSSession: true
+
+      - name: Warn about elevated permissions
+        shell: bash
+        run: |
+          echo "::warning::This workflow requires elevated Azure AD permissions (Application.ReadWrite.All, Directory.Read.All, Group.ReadWrite.All)."
+          echo "::warning::Ensure the OIDC service principal has these MS Graph API permissions pre-consented by a Global Administrator."
+
+      - name: Run Setup-AppRegistrations.ps1
+        shell: pwsh
+        run: |
+          $params = @{
+            TenantId = "${{ secrets.AZURE_TENANT_ID }}"
+          }
+
+          if ("${{ inputs.api_app_name }}" -ne "") {
+            $params.ApiAppName = "${{ inputs.api_app_name }}"
+          }
+          if ("${{ inputs.frontend_app_name }}" -ne "") {
+            $params.FrontendAppName = "${{ inputs.frontend_app_name }}"
+          }
+          if ("${{ inputs.deployment_id }}" -ne "") {
+            $params.DeploymentId = "${{ inputs.deployment_id }}"
+          }
+
+          ./deploy/Setup-AppRegistrations.ps1 @params
+
+      - name: Upload app-registration-config.json
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-registration-config
+          path: app-registration-config.json
+          retention-days: 7
+
+      - name: Output next steps
+        if: success()
+        shell: bash
+        run: |
+          echo "## ✅ App Registrations Created" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔐 Required GitHub Secrets to Set" >> $GITHUB_STEP_SUMMARY
+          echo "Download the \`app-registration-config.json\` artifact and set these secrets:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Secret | Source |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| \`API_CLIENT_ID\` | \`ApiAppId\` from config |" >> $GITHUB_STEP_SUMMARY
+          echo "| \`AUTH_SECRET\` | \`FrontendClientSecret\` from config |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "1. Download the artifact and store secrets in GitHub" >> $GITHUB_STEP_SUMMARY
+          echo "2. Run the **Deploy Infrastructure** workflow" >> $GITHUB_STEP_SUMMARY

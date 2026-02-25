@@ -7,6 +7,30 @@ This is the end-to-end guide for deploying the Linux Broker for AVD Access solut
 
 ---
 
+## Deployment Options
+
+You can deploy the Linux Broker using **either** method below. Both are fully supported and produce identical results.
+
+| Method | Best For | Guide |
+|--------|----------|-------|
+| **Manual (PowerShell)** | First-time setup, learning the components, environments without GitHub Actions | This document (steps below) |
+| **GitHub Actions (CI/CD)** | Repeatable deployments, team environments, audit trails | [deploy/GITHUB_ACTIONS_SETUP.md](deploy/GITHUB_ACTIONS_SETUP.md) |
+
+### GitHub Actions Deployment
+
+GitHub Actions automates the deployment through 4 workflows using OIDC federated credentials (no stored Azure secrets):
+
+1. **`deploy-app-registrations.yml`** — Creates Azure AD app registrations and roles (manual trigger, one-time)
+2. **`deploy-infrastructure.yml`** — Deploys Bicep infrastructure, database schema, app configuration, and runs validation (push to `main` or manual)
+3. **`deploy-vms.yml`** — Deploys AVD and/or Linux VMs (manual trigger)
+4. **`cleanup.yml`** — Tears down resources for dev/test environments (manual trigger)
+
+**To get started with GitHub Actions:** Complete the [one-time setup guide](deploy/GITHUB_ACTIONS_SETUP.md) (~30 minutes), then trigger the workflows from the Actions tab.
+
+> The remainder of this document covers the **manual (PowerShell) deployment path**. If you're using GitHub Actions, follow the setup guide linked above instead.
+
+---
+
 ## Prerequisites
 
 ### Azure Requirements
@@ -389,6 +413,7 @@ See [sql_queries/README.md](sql_queries/README.md) for additional database troub
 
 | Document | What It Covers |
 |----------|---------------|
+| [deploy/GITHUB_ACTIONS_SETUP.md](deploy/GITHUB_ACTIONS_SETUP.md) | GitHub Actions one-time setup (OIDC, secrets, environments) |
 | [CONFIGURATION.md](CONFIGURATION.md) | Complete environment variable reference — all 7 phases, dependencies, sources |
 | [sql_queries/README.md](sql_queries/README.md) | Database schema, stored procedures, manual deployment, verification queries |
 | [.env.template](.env.template) | Environment variable template for API, Functions, and host scripts |

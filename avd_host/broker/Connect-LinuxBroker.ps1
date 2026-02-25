@@ -1,6 +1,12 @@
 param (
     [Parameter(Mandatory = $false, HelpMessage = "Specify 'desktop' to use Remote Desktop, or provide the name of the application to run via xpra.")]
-    [string]$Mode = "desktop"
+    [string]$Mode = "desktop",
+
+    [Parameter(Mandatory = $false, HelpMessage = "Base URL for the Linux Broker API (e.g. https://your-broker.domain.com/api). If not set, uses the value embedded during deployment.")]
+    [string]$ApiBaseUrl = "",
+
+    [Parameter(Mandatory = $false, HelpMessage = "API App Registration Client ID for managed identity token acquisition.")]
+    [string]$ApiClientId = ""
 )
 
 $ProgressPreference = 'SilentlyContinue'
@@ -10,7 +16,13 @@ $localHostname = $env:COMPUTERNAME
 $localUsername = $env:USERNAME -replace '[^a-zA-Z0-9_]', ''
 
 # Define the API endpoints
-$apiBaseUrl = "https://your_linuxbroker_api_base_url/api"
+# DEPLOYMENT NOTE: The placeholder below is replaced by Configure-AVD-Host.ps1
+# during custom script extension deployment. You can also pass -ApiBaseUrl at runtime.
+if ($ApiBaseUrl) {
+    $apiBaseUrl = $ApiBaseUrl
+} else {
+    $apiBaseUrl = "https://your_linuxbroker_api_base_url/api"  # <-- REPLACED DURING DEPLOYMENT
+}
 $checkoutVmUrl = "$apiBaseUrl/vms/checkout"
 
 # Define the maximum number of update attempts
@@ -64,8 +76,14 @@ function Get-AccessToken {
     }
 }
 
-# Define the API's Application ID URI (use the updated valid URL)
-$apiAppIdUri = "api://your_linuxbroker_api_client_id"  # Replace with your API's actual Application ID URI
+# Define the API's Application ID URI
+# DEPLOYMENT NOTE: The placeholder below is replaced by Configure-AVD-Host.ps1
+# during custom script extension deployment. You can also pass -ApiClientId at runtime.
+if ($ApiClientId) {
+    $apiAppIdUri = "api://$ApiClientId"
+} else {
+    $apiAppIdUri = "api://your_linuxbroker_api_client_id"  # <-- REPLACED DURING DEPLOYMENT
+}
 
 # Obtain the access token using Managed Identity
 $accessToken = Get-AccessToken -Resource $apiAppIdUri

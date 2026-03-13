@@ -8,6 +8,7 @@
     
     <!-- Form to update an existing scaling rule -->
     <form action="{{ url_for('update_rule', ruleid=rule.RuleID) }}" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
         <div class="form-group">
             <label for="minVMs">Minimum VMs</label>
             <input type="number" class="form-control" id="minVMs" name="minvms" value="{{ rule.MinVMs }}" required>

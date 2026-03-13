@@ -6,6 +6,7 @@
 <div class="container mt-5">
     <h2>Add New Virtual Machine</h2>
     <form action="{{ url_for('add_vm') }}" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
         <div class="mb-3">
             <label for="hostname" class="form-label">Hostname</label>
             <input type="text" class="form-control" id="hostname" name="hostname" required>

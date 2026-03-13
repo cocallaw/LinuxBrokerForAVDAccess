@@ -20,11 +20,19 @@ CURRENT_USERS_DETAILS="$output_directory/xrdp-loggedin-users.txt"
 
 CRON_SCHEDULE="0 * * * *" 
 
-YOUR_LINUXBROKER_API_CLIENT_ID="${1:-my_actual_client_id}"   # <-- REQUIRED: Pass as 1st arg or replace with API Client ID
-YOUR_LINUXBROKER_API_URL="${2:-my.actual.linuxbroker.api.url}" # <-- REQUIRED: Pass as 2nd arg or replace with API URL
+YOUR_LINUXBROKER_API_CLIENT_ID="${1}"   # <-- REQUIRED: Pass as 1st arg or replace with API Client ID
+YOUR_LINUXBROKER_API_URL="${2}"         # <-- REQUIRED: Pass as 2nd arg or replace with API URL
+
+# Validate required arguments
+if [ -z "$YOUR_LINUXBROKER_API_CLIENT_ID" ] || [ -z "$YOUR_LINUXBROKER_API_URL" ]; then
+    echo "ERROR: Required arguments missing. Usage: $0 <api_client_id> <api_url>"
+    exit 1
+fi
 
 # ===============================
 # Execution
+
+set -e  # Exit immediately if a command exits with a non-zero status
 
 echo "Updating and upgrading system packages..."
 sudo apt update -y && sudo apt upgrade -y

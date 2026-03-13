@@ -6,6 +6,7 @@
 <div class="container mt-5">
     <h2>Update VM Attributes</h2>
     <form action="{{ url_for('update_vm_attributes', vmid=vm.VMID) }}" method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
         <div class="form-group">
             <label for="powerstate">Power State</label>
             <select class="form-control" id="powerstate" name="powerstate" required>

@@ -12,6 +12,8 @@ SCRIPT_PATH_TO_CHECK_XRDP_USERS_INFO="$LOCATION_PATH/xrdp-who-xorg.sh"
 CURRENT_USERS_DETAILS="$LOCATION_PATH/xrdp-loggedin-users.txt"
 PREVIOUS_USERS_FILE="/tmp/previous_users.txt"
 hostname=$(hostname)
+API_CLIENT_ID="YOUR_LINUX_BROKER_API_CLIENT_ID"
+API_BASE_URL="YOUR_LINUX_BROKER_API_URL"
 
 # Default run mode
 RUN_MODE="manual"
@@ -32,8 +34,14 @@ log "Script started, lock acquired."
 
 trap "log 'Script exiting.'" EXIT INT TERM
 
+# Validate that deployment placeholders were replaced
+if [[ "$API_CLIENT_ID" == YOUR_* ]] || [[ "$API_BASE_URL" == YOUR_* ]]; then
+    log "ERROR: Deployment placeholders were not replaced in this script. Run the Configure-*-Host.sh script first."
+    exit 1
+fi
+
 get_access_token() {
-    local resource="api://YOUR_LINUX_BROKER_API_CLIENT_ID"
+    local resource="api://$API_CLIENT_ID"
     local imds_endpoint="http://169.254.169.254/metadata/identity/oauth2/token"
     local api_version="2018-02-01"
     local uri="$imds_endpoint?api-version=$api_version&resource=$resource"
@@ -50,7 +58,7 @@ get_access_token() {
 }
 
 release_vm() {
-    local api_base_url="YOUR_LINUX_BROKER_API_URL"
+    local api_base_url="$API_BASE_URL"
     local release_vm_url="$api_base_url/vms/$hostname/release"
     local access_token=$(get_access_token)
 

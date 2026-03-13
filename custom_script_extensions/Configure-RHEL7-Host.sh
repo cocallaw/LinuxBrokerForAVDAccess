@@ -17,8 +17,8 @@ remoteAccessTool="both"  # Options: "xrdp", "xpra", or "both"
 
 # RHEL Subscription Manager — set register="false" if already registered
 register="true"
-orgId="${1:-ORG_ID}"                    # <-- REQUIRED: Pass as 1st arg or replace with your RHEL Org ID
-activationKey="${2:-ACTIVATION_KEY}"    # <-- REQUIRED: Pass as 2nd arg or replace with your activation key
+orgId="${1}"                             # <-- REQUIRED: Pass as 1st arg or replace with your RHEL Org ID
+activationKey="${2}"                    # <-- REQUIRED: Pass as 2nd arg or replace with your activation key
 
 output_directory="/usr/local/bin"
 
@@ -29,11 +29,19 @@ CURRENT_USERS_DETAILS="$output_directory/xrdp-loggedin-users.txt"
 
 CRON_SCHEDULE="0 * * * *"
 
-YOUR_LINUXBROKER_API_CLIENT_ID="${3:-my_actual_client_id}"   # <-- REQUIRED: Pass as 3rd arg or replace with API Client ID
-YOUR_LINUXBROKER_API_URL="${4:-my.actual.linuxbroker.api.url}" # <-- REQUIRED: Pass as 4th arg or replace with API URL
+YOUR_LINUXBROKER_API_CLIENT_ID="${3}"   # <-- REQUIRED: Pass as 3rd arg or replace with API Client ID
+YOUR_LINUXBROKER_API_URL="${4}"         # <-- REQUIRED: Pass as 4th arg or replace with API URL
+
+# Validate required arguments
+if [ -z "$orgId" ] || [ -z "$activationKey" ] || [ -z "$YOUR_LINUXBROKER_API_CLIENT_ID" ] || [ -z "$YOUR_LINUXBROKER_API_URL" ]; then
+    echo "ERROR: Required arguments missing. Usage: $0 <org_id> <activation_key> <api_client_id> <api_url>"
+    exit 1
+fi
 
 # ===============================
 # Execution
+
+set -e  # Exit immediately if a command exits with a non-zero status
 
 if [ "$register" = "true" ]; then
     echo "Registering the system..."

@@ -54,9 +54,11 @@ param adminPassword string
 param linuxBrokerApiBaseUrl string
 @description('API App Registration Client ID for managed identity token acquisition')
 param linuxBrokerApiClientId string
+@description('GitHub branch or tag name used for custom script extension URLs (e.g. main, v1.0.0)')
+param scriptBranch string = 'main'
 // Linux Broker Configuration Script URI
 @description('URI for the AVD Linux Broker configuration script')
-param linuxBrokerConfigScriptUri string = 'https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDAccess/refs/heads/main/custom_script_extensions/Configure-AVD-Host.ps1'
+param linuxBrokerConfigScriptUri string = 'https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDAccess/refs/heads/${scriptBranch}/custom_script_extensions/Configure-AVD-Host.ps1'
 
 // Multisession image without Office
 var osImage = 'microsoftwindowsdesktop:Windows-11:win11-24h2-avd:latest'

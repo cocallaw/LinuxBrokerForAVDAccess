@@ -1,15 +1,15 @@
 {
-  "FrontendAppName": "LinuxBroker-Frontend-m6ko3f",
-  "FrontendAppId": "FAILED_TO_CREATE",
-  "FrontendServicePrincipalId": "FAILED_TO_CREATE",
-  "DeploymentId": "m6ko3f",
-  "TenantId": "18828407-d6bb-465f-bba3-f6ab82d1c4a4",
-  "LinuxHostGroupId": "NOT_CREATED",
-  "LinuxHostGroupName": "LinuxBroker-LinuxHost-VMs-m6ko3f",
-  "ApiAppId": "FAILED_TO_CREATE",
-  "AVDHostGroupName": "LinuxBroker-AVDHost-VMs-m6ko3f",
-  "AVDHostGroupId": "NOT_CREATED",
-  "FrontendClientSecret": "FAILED_TO_CREATE",
-  "ApiServicePrincipalId": "FAILED_TO_CREATE",
-  "ApiAppName": "LinuxBroker-API-m6ko3f"
+  "FrontendAppName": "LinuxBroker-Frontend-<DEPLOYMENT_ID>",
+  "FrontendAppId": "<FRONTEND_APP_ID>",
+  "FrontendServicePrincipalId": "<FRONTEND_SERVICE_PRINCIPAL_ID>",
+  "DeploymentId": "<DEPLOYMENT_ID>",
+  "TenantId": "<TENANT_ID>",
+  "LinuxHostGroupId": "<LINUX_HOST_GROUP_ID>",
+  "LinuxHostGroupName": "LinuxBroker-LinuxHost-VMs-<DEPLOYMENT_ID>",
+  "ApiAppId": "<API_APP_ID>",
+  "AVDHostGroupName": "LinuxBroker-AVDHost-VMs-<DEPLOYMENT_ID>",
+  "AVDHostGroupId": "<AVD_HOST_GROUP_ID>",
+  "FrontendClientSecret": "<FRONTEND_CLIENT_SECRET>",
+  "ApiServicePrincipalId": "<API_SERVICE_PRINCIPAL_ID>",
+  "ApiAppName": "LinuxBroker-API-<DEPLOYMENT_ID>"
 }

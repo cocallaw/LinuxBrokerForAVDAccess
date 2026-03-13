@@ -43,6 +43,8 @@ param rhelActivationKey string = ''
 param linuxBrokerApiClientId string = ''
 @description('Linux Broker API base URL (e.g. https://your-broker.domain.com/api)')
 param linuxBrokerApiUrl string = ''
+@description('GitHub branch or tag name used for custom script extension URLs (e.g. main, v1.0.0)')
+param scriptBranch string = 'main'
 
 var vmNames = [for i in range(1, numberOfVMs): '${vmNamePrefix}-${padLeft(i, 2, '0')}']
 var adminPass = authType == 'Password' ? adminPassword : sshPublicKey
@@ -56,7 +58,7 @@ var imageConfigs = {
       version: 'latest'
     }
     script: {
-      uri: 'https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDAccess/refs/heads/main/custom_script_extensions/Configure-RHEL7-Host.sh'
+      uri: 'https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDAccess/refs/heads/${scriptBranch}/custom_script_extensions/Configure-RHEL7-Host.sh'
       cmd: 'bash Configure-RHEL7-Host.sh \'${rhelOrgId}\' \'${rhelActivationKey}\' \'${linuxBrokerApiClientId}\' \'${linuxBrokerApiUrl}\''
     }
   }
@@ -68,7 +70,7 @@ var imageConfigs = {
       version: 'latest'
     }
     script: {
-      uri: 'https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDAccess/refs/heads/main/custom_script_extensions/Configure-RHEL8-Host.sh'
+      uri: 'https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDAccess/refs/heads/${scriptBranch}/custom_script_extensions/Configure-RHEL8-Host.sh'
       cmd: 'bash Configure-RHEL8-Host.sh \'${rhelOrgId}\' \'${rhelActivationKey}\' \'${linuxBrokerApiClientId}\' \'${linuxBrokerApiUrl}\''
     }
   }
@@ -80,7 +82,7 @@ var imageConfigs = {
       version: 'latest'
     }
     script: {
-      uri: 'https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDAccess/refs/heads/main/custom_script_extensions/Configure-RHEL9-Host.sh'
+      uri: 'https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDAccess/refs/heads/${scriptBranch}/custom_script_extensions/Configure-RHEL9-Host.sh'
       cmd: 'bash Configure-RHEL9-Host.sh \'${rhelOrgId}\' \'${rhelActivationKey}\' \'${linuxBrokerApiClientId}\' \'${linuxBrokerApiUrl}\''
     }
   }
@@ -92,7 +94,7 @@ var imageConfigs = {
       version: 'latest'
     }
     script: {
-      uri: 'https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDAccess/refs/heads/main/custom_script_extensions/Configure-Ubuntu24_desktop-Host.sh'
+      uri: 'https://raw.githubusercontent.com/microsoft/LinuxBrokerForAVDAccess/refs/heads/${scriptBranch}/custom_script_extensions/Configure-Ubuntu24_desktop-Host.sh'
       cmd: 'bash Configure-Ubuntu24_desktop-Host.sh \'${linuxBrokerApiClientId}\' \'${linuxBrokerApiUrl}\''
     }
   }

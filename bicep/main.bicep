@@ -4,6 +4,9 @@ param projectName string = 'linuxbroker'
 param environment string = 'dev'
 param tags object = {}
 
+@description('GitHub branch or tag name used for custom script extension URLs (e.g. main, v1.0.0)')
+param scriptBranch string = 'main'
+
 // SQL Configuration
 param sqlAdminUsername string = 'sqladmin'
 @secure()
@@ -79,6 +82,7 @@ module avdDeployment 'AVD/main.bicep' = if (deployAVD) {
     vnetResourceGroup: vnetResourceGroup
     linuxBrokerApiBaseUrl: infrastructure.outputs.apiAppUrl
     linuxBrokerApiClientId: linuxBrokerApiClientId
+    scriptBranch: scriptBranch
   }
 }
 
@@ -104,6 +108,7 @@ module linuxVmDeployment 'Linux/main.bicep' = if (deployLinuxVMs) {
     rhelActivationKey: rhelActivationKey
     linuxBrokerApiClientId: linuxBrokerApiClientId
     linuxBrokerApiUrl: infrastructure.outputs.apiAppUrl
+    scriptBranch: scriptBranch
   }
   dependsOn: [
     infrastructure

@@ -5,6 +5,7 @@ import requests as req_lib
 
 from flask import Flask, jsonify, render_template, send_from_directory
 from flask_session import Session
+from flask_wtf.csrf import CSRFProtect
 from route_authentication import register_route_authentication
 from route_user import register_route_user
 from route_vm_management import register_route_vm_management
@@ -52,6 +53,7 @@ app.config['SECRET_KEY'] = os.environ.get('FLASK_KEY')
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['VERSION'] = '0.111'
 Session(app)
+CSRFProtect(app)
 
 logger.info("Service Management Portal v%s started successfully.", app.config['VERSION'])
 

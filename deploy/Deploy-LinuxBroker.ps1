@@ -3,12 +3,15 @@
 
 param(
     [Parameter(Mandatory=$true)]
+    [ValidateNotNullOrEmpty()]
     [string]$SubscriptionId,
     
     [Parameter(Mandatory=$true)]
+    [ValidateNotNullOrEmpty()]
     [string]$ResourceGroupName,
     
     [Parameter(Mandatory=$true)]
+    [ValidateNotNullOrEmpty()]
     [string]$Location,
     
     [Parameter(Mandatory=$false)]
@@ -910,8 +913,7 @@ try {
             Remove-Item $tempZip -Force -ErrorAction SilentlyContinue
             
         } catch {
-            Write-Warning "Function deployment failed with both methods. Please deploy manually using: func azure functionapp publish $functionAppName --python"
-            Write-Warning "Error details: $($_.Exception.Message)"
+            throw "Function deployment failed with both methods. Please deploy manually using: func azure functionapp publish $functionAppName --python`nError details: $($_.Exception.Message)"
         }
     }
 

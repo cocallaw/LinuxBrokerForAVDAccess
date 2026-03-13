@@ -51,12 +51,15 @@
                     <a href="{{ url_for('view_vm_details', vmid=vm.VMID) }}" class="btn btn-info btn-sm" aria-label="View details of VM {{ vm.VMID }}">Details</a>
                     <a href="{{ url_for('update_vm_attributes', vmid=vm.VMID) }}" class="btn btn-warning btn-sm" aria-label="Edit VM {{ vm.VMID }}">Edit</a>
                     <form action="{{ url_for('delete_vm', vmid=vm.VMID) }}" method="post" class="d-inline-block" onsubmit="return confirm('Are you sure you want to delete this VM?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <button type="submit" class="btn btn-danger btn-sm" aria-label="Delete VM {{ vm.VMID }}">Delete</button>
                     </form>                    
                     <form action="{{ url_for('release_vm', hostname=vm.Hostname) }}" method="post" class="d-inline-block" onsubmit="return confirm('Are you sure you want to release this VM?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <button type="submit" class="btn btn-secondary btn-sm" aria-label="Release VM {{ vm.Hostname }}">Release</button>
                     </form>
                     <form action="{{ url_for('return_vm', vmid=vm.VMID) }}" method="post" class="d-inline-block" onsubmit="return confirm('Are you sure you want to return this VM?');">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <button type="submit" class="btn btn-primary btn-sm" aria-label="Return VM {{ vm.VMID }}">Return</button>
                     </form>
                 </td>

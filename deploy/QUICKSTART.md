@@ -34,15 +34,14 @@ Deploy just the API, Database, Frontend, and Function App:
 
 ### Step 4: Full Deployment (Optional)
 
-Deploy with AVD and Linux VMs:
+Deploy with a VM configuration file to provision AVD and Linux VMs:
 
 ```powershell
 .\deploy\Deploy-LinuxBroker.ps1 `
   -SubscriptionId "your-sub-id" `
   -ResourceGroupName "rg-linuxbroker" `
   -Location "East US" `
-  -DeployAVD $true `
-  -DeployLinuxVMs $true
+  -VMConfigPath "./vm-deployment-config.json"
 ```
 
 ## 🔧 Alternative: Bicep Direct Deployment
@@ -170,5 +169,5 @@ Supported out of the box:
 
 - [Detailed Architecture Guide](../README.md)
 - [Database Setup Guide](../sql_queries/README.md)
-- [RBAC Configuration Guide](../docs/rbac-setup.md)
-- [Troubleshooting Guide](../docs/troubleshooting.md)
+- [RBAC Configuration Guide](../README.md)
+- [Troubleshooting Guide](../DEPLOYMENT.md)

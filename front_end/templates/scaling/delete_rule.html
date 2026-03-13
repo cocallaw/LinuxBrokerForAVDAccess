@@ -27,6 +27,7 @@
 
     <!-- Form to confirm deletion -->
     <form method="POST" action="{{ url_for('delete_rule', ruleid=rule['RuleID']) }}" class="mt-4">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
         <button type="submit" class="btn btn-danger">Delete Rule</button>
         <a href="{{ url_for('view_all_rules') }}" class="btn btn-secondary">Cancel</a>
     </form>

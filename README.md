@@ -195,7 +195,14 @@ Given that AVD acts as a pass-through in this solution, starting with **light to
 
 The deployment guide covers prerequisites, infrastructure provisioning, database setup, environment configuration, and post-deployment validation — everything needed to go from zero to a running solution.
 
-### Quick Start
+### Deployment Options
+
+| Method | Description |
+|--------|-------------|
+| **Manual (PowerShell)** | Step-by-step deployment via CLI scripts — see [DEPLOYMENT.md](DEPLOYMENT.md) |
+| **GitHub Actions (CI/CD)** | Automated workflows using OIDC — see [deploy/GITHUB_ACTIONS_SETUP.md](deploy/GITHUB_ACTIONS_SETUP.md) for one-time setup |
+
+### Quick Start (Manual)
 
 ```powershell
 # 1. Verify your environment is ready
@@ -223,7 +230,8 @@ cd sql_queries && .\Deploy-Database.ps1 -ServerName "<server>.database.windows.n
 
 | Document | Purpose |
 |----------|---------|
-| [DEPLOYMENT.md](DEPLOYMENT.md) | End-to-end deployment guide |
+| [DEPLOYMENT.md](DEPLOYMENT.md) | End-to-end deployment guide (manual path) |
+| [deploy/GITHUB_ACTIONS_SETUP.md](deploy/GITHUB_ACTIONS_SETUP.md) | GitHub Actions one-time setup |
 | [CONFIGURATION.md](CONFIGURATION.md) | Environment variable reference (all 7 phases) |
 | [sql_queries/README.md](sql_queries/README.md) | Database schema and stored procedures |
 | [deploy/QUICKSTART.md](deploy/QUICKSTART.md) | Condensed quick-start reference |

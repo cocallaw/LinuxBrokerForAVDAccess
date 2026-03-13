@@ -1,5 +1,0 @@
-{
-  "universes": ["alien-1979"],
-  "max_capacity_per_universe": 7,
-  "overflow_strategy": "diegetic_expansion"
-}
